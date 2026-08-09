@@ -1,183 +1,113 @@
 package com.quince.lawyeraiassistant.agent.action;
 
+import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionDecision;
-import com.quince.lawyeraiassistant.agent.model.AgentTask;
-import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
-import com.quince.lawyeraiassistant.agent.model.ToolAction;
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalKnowledgeTool;
-import org.junit.jupiter.api.BeforeEach;
+import com.quince.lawyeraiassistant.agent.model.AgentActionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class AgentActionDecisionMapperTest {
 
-    private AgentActionDecisionMapper mapper;
+        private final AgentActionDecisionMapper mapper = new AgentActionDecisionMapper();
 
-    @BeforeEach
-    void setUp() {
-        mapper = new AgentActionDecisionMapper();
-    }
+        @Test
+        void shouldMapToolDecision() {
 
-    @Test
-    void shouldMapDecisionToToolAction() {
+                AgentActionDecision decision = new AgentActionDecision(
+                                AgentActionType.TOOL,
+                                "searchLegalKnowledge",
+                                Map.of(
+                                                "legalQuestion",
+                                                "违法解除劳动合同"));
 
-        AgentTask task = createTask();
+                AgentAction action = mapper.map(
+                                "task-1",
+                                decision);
 
-        AgentActionDecision decision = new AgentActionDecision(
-                LegalKnowledgeTool.TOOL_NAME,
-                Map.of(
-                        "legalQuestion",
-                        "劳动合同违法解除的法律责任"));
+                assertTrue(
+                                action.isTool());
 
-        ToolAction action = mapper.map(
-                task,
-                decision);
+                assertEquals(
+                                AgentActionType.TOOL,
+                                action.getType());
 
-        assertEquals(
-                "task-1",
-                action.getTaskId());
+                assertEquals(
+                                "task-1",
+                                action.getTaskId());
 
-        assertEquals(
-                LegalKnowledgeTool.TOOL_NAME,
-                action.getToolName());
+                assertEquals(
+                                "searchLegalKnowledge",
+                                action.requireToolAction()
+                                                .getToolName());
 
-        assertEquals(
-                "劳动合同违法解除的法律责任",
-                action.getArguments()
-                        .get("legalQuestion"));
-    }
+                assertEquals(
+                                "违法解除劳动合同",
+                                action.requireToolAction()
+                                                .getArguments()
+                                                .get("legalQuestion"));
+        }
 
-    @Test
-    void shouldNormalizeToolName() {
+        @Test
+        void shouldMapReasonDecision() {
 
-        AgentActionDecision decision = new AgentActionDecision(
-                "  searchLegalKnowledge  ",
-                Map.of());
+                AgentActionDecision decision = new AgentActionDecision(
+                                AgentActionType.REASON,
+                                null,
+                                null);
 
-        ToolAction action = mapper.map(
-                createTask(),
-                decision);
+                AgentAction action = mapper.map(
+                                "task-2",
+                                decision);
 
-        assertEquals(
-                LegalKnowledgeTool.TOOL_NAME,
-                action.getToolName());
-    }
+                assertTrue(
+                                action.isReason());
 
-    @Test
-    void shouldNormalizeNullArgumentsToEmptyMap() {
+                assertEquals(
+                                "task-2",
+                                action.getTaskId());
 
-        AgentActionDecision decision = new AgentActionDecision(
-                LegalKnowledgeTool.TOOL_NAME,
-                null);
+                assertNull(
+                                action.getToolAction());
+        }
 
-        ToolAction action = mapper.map(
-                createTask(),
-                decision);
+        @Test
+        void shouldMapFinalAnswerDecision() {
 
-        assertTrue(
-                action.getArguments()
-                        .isEmpty());
-    }
+                AgentActionDecision decision = new AgentActionDecision(
+                                AgentActionType.FINAL_ANSWER,
+                                null,
+                                null);
 
-    @Test
-    void shouldRejectNullTask() {
+                AgentAction action = mapper.map(
+                                "task-3",
+                                decision);
 
-        AgentActionDecision decision = new AgentActionDecision(
-                LegalKnowledgeTool.TOOL_NAME,
-                Map.of());
+                assertTrue(
+                                action.isFinalAnswer());
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> mapper.map(
-                        null,
-                        decision));
+                assertEquals(
+                                "task-3",
+                                action.getTaskId());
 
-        assertEquals(
-                "AgentTask must not be null",
-                exception.getMessage());
-    }
+                assertNull(
+                                action.getToolAction());
+        }
 
-    @Test
-    void shouldRejectNullDecision() {
+        @Test
+        void shouldRejectToolDecisionWithoutToolName() {
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> mapper.map(
-                        createTask(),
-                        null));
+                AgentActionDecision decision = new AgentActionDecision(
+                                AgentActionType.TOOL,
+                                null,
+                                Map.of());
 
-        assertEquals(
-                "Agent action decision must not be null",
-                exception.getMessage());
-    }
-
-    @Test
-    void shouldRejectNullToolName() {
-
-        AgentActionDecision decision = new AgentActionDecision(
-                null,
-                Map.of());
-
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> mapper.map(
-                        createTask(),
-                        decision));
-
-        assertEquals(
-                "Agent action decision toolName must not be null",
-                exception.getMessage());
-    }
-
-    @Test
-    void shouldRejectBlankToolName() {
-
-        AgentActionDecision decision = new AgentActionDecision(
-                "   ",
-                Map.of());
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> mapper.map(
-                        createTask(),
-                        decision));
-
-        assertEquals(
-                "Agent action decision toolName must not be blank",
-                exception.getMessage());
-    }
-
-    @Test
-    void shouldRejectUnsupportedTool() {
-
-        AgentActionDecision decision = new AgentActionDecision(
-                "inventedTool",
-                Map.of());
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> mapper.map(
-                        createTask(),
-                        decision));
-
-        assertEquals(
-                "Unsupported Agent tool: inventedTool",
-                exception.getMessage());
-    }
-
-    private AgentTask createTask() {
-
-        return AgentTask.builder()
-                .id("task-1")
-                .description(
-                        "查询劳动合同违法解除相关法律规定")
-                .status(
-                        AgentTaskStatus.PENDING)
-                .build();
-    }
+                assertThrows(
+                                NullPointerException.class,
+                                () -> mapper.map(
+                                                "task-1",
+                                                decision));
+        }
 }

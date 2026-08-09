@@ -1,6 +1,5 @@
 package com.quince.lawyeraiassistant.retrieval.integration;
 
-import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.query.pipeline.DefaultQueryPipeline;
 import com.quince.lawyeraiassistant.query.pipeline.QueryPipeline;
 import com.quince.lawyeraiassistant.query.transformer.RewriteTransformer;

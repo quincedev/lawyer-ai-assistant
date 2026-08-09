@@ -1,7 +1,11 @@
 package com.quince.lawyeraiassistant.prompt.builder;
 
+import com.quince.lawyeraiassistant.agent.prompt.model.FinalAnswerPromptContext;
 import com.quince.lawyeraiassistant.agent.prompt.model.PlanningPromptContext;
 import com.quince.lawyeraiassistant.agent.prompt.model.ReasonPromptContext;
+import com.quince.lawyeraiassistant.agent.prompt.model.ReflectionPromptContext;
+import com.quince.lawyeraiassistant.agent.prompt.model.ReplanningPromptContext;
+import com.quince.lawyeraiassistant.agent.prompt.model.RuntimeReasonPromptContext;
 import com.quince.lawyeraiassistant.prompt.factory.PromptFactory;
 import com.quince.lawyeraiassistant.prompt.knowledge.KnowledgeFormatter;
 import com.quince.lawyeraiassistant.prompt.model.PromptContext;
@@ -175,6 +179,131 @@ public class PromptBuilder {
                                 List.of(
                                                 new SystemMessage(
                                                                 renderedPlanningPrompt)));
+        }
+
+        /**
+         * 构建 Agent Final Answer Prompt。
+         *
+         * <p>
+         * Final Answer 阶段负责基于 Agent 已完成的执行上下文，
+         * 生成最终面向用户的自然语言回答。
+         * </p>
+         *
+         * @param context Final Answer Prompt 上下文
+         * @return Spring AI Prompt
+         */
+        public Prompt buildFinalAnswer(
+                        FinalAnswerPromptContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "FinalAnswerPromptContext must not be null");
+
+                PromptFragment finalAnswerFragment = promptFactory.agentFinalAnswer();
+
+                validateFragment(
+                                finalAnswerFragment,
+                                "Agent final answer PromptFragment");
+
+                String renderedFinalAnswerPrompt = renderFragment(
+                                finalAnswerFragment,
+                                context.toVariables(),
+                                "Rendered agent final answer prompt");
+
+                return new Prompt(
+                                List.of(
+                                                new SystemMessage(
+                                                                renderedFinalAnswerPrompt)));
+        }
+
+        /**
+         * 构建 Agent Reflection Prompt。
+         *
+         * @param context Reflection Prompt 上下文
+         * @return Spring AI Prompt
+         */
+        public Prompt buildReflection(
+                        ReflectionPromptContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "ReflectionPromptContext must not be null");
+
+                PromptFragment reflectionFragment = promptFactory.agentReflection();
+
+                validateFragment(
+                                reflectionFragment,
+                                "Agent reflection PromptFragment");
+
+                String renderedReflectionPrompt = renderFragment(
+                                reflectionFragment,
+                                context.toVariables(),
+                                "Rendered agent reflection prompt");
+
+                return new Prompt(
+                                List.of(
+                                                new SystemMessage(
+                                                                renderedReflectionPrompt)));
+        }
+
+        /**
+         * 构建 Agent Replanning Prompt。
+         *
+         * @param context Replanning Prompt 上下文
+         * @return Spring AI Prompt
+         */
+        public Prompt buildReplanning(
+                        ReplanningPromptContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "ReplanningPromptContext must not be null");
+
+                PromptFragment replanningFragment = promptFactory.agentReplanning();
+
+                validateFragment(
+                                replanningFragment,
+                                "Agent replanning PromptFragment");
+
+                String renderedReplanningPrompt = renderFragment(
+                                replanningFragment,
+                                context.toVariables(),
+                                "Rendered agent replanning prompt");
+
+                return new Prompt(
+                                List.of(
+                                                new SystemMessage(
+                                                                renderedReplanningPrompt)));
+        }
+
+        /**
+         * 构建 Agent Runtime Reason Prompt。
+         *
+         * @param context Runtime Reason Prompt 上下文
+         * @return Spring AI Prompt
+         */
+        public Prompt buildRuntimeReason(
+                        RuntimeReasonPromptContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "RuntimeReasonPromptContext must not be null");
+
+                PromptFragment runtimeReasonFragment = promptFactory.agentRuntimeReason();
+
+                validateFragment(
+                                runtimeReasonFragment,
+                                "Agent runtime reason PromptFragment");
+
+                String renderedRuntimeReasonPrompt = renderFragment(
+                                runtimeReasonFragment,
+                                context.toVariables(),
+                                "Rendered agent runtime reason prompt");
+
+                return new Prompt(
+                                List.of(
+                                                new SystemMessage(
+                                                                renderedRuntimeReasonPrompt)));
         }
 
         /**

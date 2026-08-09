@@ -1,175 +1,619 @@
 package com.quince.lawyeraiassistant.agent.runtime;
 
+import com.quince.lawyeraiassistant.agent.action.AgentActionSelector;
+import com.quince.lawyeraiassistant.agent.model.AgentAction;
+import com.quince.lawyeraiassistant.agent.model.AgentActionExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.agent.model.AgentPlan;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
-import com.quince.lawyeraiassistant.agent.operator.ToolExecutionOperator;
+import com.quince.lawyeraiassistant.agent.model.AgentTask;
+import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
+import com.quince.lawyeraiassistant.agent.model.ReflectionResult;
+import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
+import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
+import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
+import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
+import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
-/**
- * 默认 Agent Runtime。
- *
- * <p>
- * 执行策略：
- * </p>
- *
- * <ol>
- * <li>首先执行一次完整 AgentPipeline</li>
- * <li>Pipeline 完成 Reason / Planning / 第一个 Tool Task</li>
- * <li>继续执行剩余 PENDING Task</li>
- * <li>所有 Task 完成后将 Agent 标记为 FINISHED</li>
- * <li>达到 maxSteps 时停止，防止无限循环</li>
- * </ol>
- */
 @Component
 public class DefaultAgentRuntime
-        implements AgentRuntime {
+                implements AgentRuntime {
 
-    private final AgentPipeline agentPipeline;
+        private static final String AGENT_FINISHED_LOG = "Agent finished";
 
-    private final ToolExecutionOperator toolExecutionOperator;
+        private final AgentPipeline agentPipeline;
 
-    private final int maxSteps;
+        private final AgentActionSelector actionSelector;
 
-    public DefaultAgentRuntime(
-            AgentPipeline agentPipeline,
-            ToolExecutionOperator toolExecutionOperator,
-            @Value("${agent.runtime.max-steps:10}") int maxSteps) {
+        private final AgentActionExecutionOperator actionExecutionOperator;
 
-        this.agentPipeline = Objects.requireNonNull(
-                agentPipeline,
-                "agentPipeline must not be null");
+        private final AgentReflectionService reflectionService;
 
-        this.toolExecutionOperator = Objects.requireNonNull(
-                toolExecutionOperator,
-                "toolExecutionOperator must not be null");
+        private final AgentReplanningService replanningService;
 
-        if (maxSteps <= 0) {
-            throw new IllegalArgumentException(
-                    "maxSteps must be greater than zero");
+        private final AgentFinalAnswerService finalAnswerService;
+
+        private final int maxSteps;
+
+        private final int maxRetriesPerTask;
+
+        private final int maxReplans;
+
+        public DefaultAgentRuntime(
+                        AgentPipeline agentPipeline,
+                        AgentActionSelector actionSelector,
+                        AgentActionExecutionOperator actionExecutionOperator,
+                        AgentReflectionService reflectionService,
+                        AgentReplanningService replanningService,
+                        AgentFinalAnswerService finalAnswerService,
+                        @Value("${agent.runtime.max-steps:10}") int maxSteps,
+                        @Value("${agent.runtime.max-retries-per-task:2}") int maxRetriesPerTask,
+                        @Value("${agent.runtime.max-replans:2}") int maxReplans) {
+
+                this.agentPipeline = Objects.requireNonNull(
+                                agentPipeline,
+                                "agentPipeline must not be null");
+
+                this.actionSelector = Objects.requireNonNull(
+                                actionSelector,
+                                "actionSelector must not be null");
+
+                this.actionExecutionOperator = Objects.requireNonNull(
+                                actionExecutionOperator,
+                                "actionExecutionOperator must not be null");
+
+                this.reflectionService = Objects.requireNonNull(
+                                reflectionService,
+                                "reflectionService must not be null");
+
+                this.replanningService = Objects.requireNonNull(
+                                replanningService,
+                                "replanningService must not be null");
+
+                this.finalAnswerService = Objects.requireNonNull(
+                                finalAnswerService,
+                                "finalAnswerService must not be null");
+
+                if (maxSteps <= 0) {
+                        throw new IllegalArgumentException(
+                                        "maxSteps must be greater than zero");
+                }
+
+                if (maxRetriesPerTask < 0) {
+                        throw new IllegalArgumentException(
+                                        "maxRetriesPerTask must not be negative");
+                }
+
+                if (maxReplans < 0) {
+                        throw new IllegalArgumentException(
+                                        "maxReplans must not be negative");
+                }
+
+                this.maxSteps = maxSteps;
+
+                this.maxRetriesPerTask = maxRetriesPerTask;
+
+                this.maxReplans = maxReplans;
         }
 
-        this.maxSteps = maxSteps;
-    }
+        @Override
+        public AgentContext run(
+                        AgentContext context) {
 
-    @Override
-    public AgentContext run(
-            AgentContext context) {
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
 
-        Objects.requireNonNull(
-                context,
-                "AgentContext must not be null");
+                /*
+                 * Initialization:
+                 *
+                 * Reason
+                 * ↓
+                 * Planning
+                 */
+                AgentContext current = agentPipeline.execute(
+                                context);
+
+                int executedSteps = 0;
+
+                int replanCount = 0;
+
+                Map<String, Integer> retryCounts = new HashMap<>();
+
+                /*
+                 * Full Agent Loop:
+                 *
+                 * Current Task
+                 * ↓
+                 * Action Selection
+                 * ↓
+                 * Action Execution
+                 * ↓
+                 * Apply Result
+                 * ↓
+                 * Reflection
+                 * ↓
+                 * CONTINUE / RETRY / REPLAN / FINISH
+                 */
+                while (hasPendingTask(
+                                current)
+                                && executedSteps < maxSteps) {
+
+                        /*
+                         * 1. Resolve current task.
+                         */
+                        AgentTask pendingTask = current.getAgentPlan()
+                                        .nextPendingTask()
+                                        .orElseThrow();
+
+                        /*
+                         * 2. PENDING → RUNNING
+                         */
+                        current = updateTaskStatus(
+                                        current,
+                                        pendingTask.getId(),
+                                        AgentTaskStatus.RUNNING);
+
+                        AgentTask runningTask = current.getAgentPlan()
+                                        .findTaskById(
+                                                        pendingTask.getId())
+                                        .orElseThrow();
+
+                        /*
+                         * 3. Decide.
+                         */
+                        AgentAction action = actionSelector.select(
+                                        current,
+                                        runningTask);
+
+                        /*
+                         * 4. Act.
+                         */
+                        AgentActionExecutionResult result = actionExecutionOperator.execute(
+                                        current,
+                                        runningTask,
+                                        action);
+
+                        /*
+                         * 5. Observe / Apply.
+                         */
+                        current = applyExecutionResult(
+                                        current,
+                                        runningTask,
+                                        result);
+
+                        executedSteps++;
+
+                        /*
+                         * FINAL_ANSWER is terminal.
+                         *
+                         * Final Answer 已经生成，
+                         * 不需要再次 Reflection。
+                         */
+                        if (current.hasFinalAnswer()) {
+
+                                return markFinished(
+                                                current);
+                        }
+
+                        /*
+                         * 6. Reflect.
+                         */
+                        ReflectionResult reflectionResult = reflectionService.reflect(
+                                        current,
+                                        runningTask);
+
+                        /*
+                         * =====================================================
+                         * RETRY Guardrail
+                         * =====================================================
+                         */
+                        if (reflectionResult.shouldRetry()) {
+
+                                int retryCount = retryCounts.getOrDefault(
+                                                runningTask.getId(),
+                                                0);
+
+                                /*
+                                 * maxRetriesPerTask = 2 时：
+                                 *
+                                 * 初始执行
+                                 * RETRY #1
+                                 * RETRY #2
+                                 *
+                                 * 第三次再次要求 RETRY 时，
+                                 * Guardrail 生效。
+                                 */
+                                if (retryCount >= maxRetriesPerTask) {
+
+                                        return finishWithFallback(
+                                                        current,
+                                                        "Maximum retries reached for task: "
+                                                                        + runningTask.getId());
+                                }
+
+                                retryCounts.put(
+                                                runningTask.getId(),
+                                                retryCount + 1);
+                        }
+
+                        /*
+                         * =====================================================
+                         * REPLAN Guardrail
+                         * =====================================================
+                         */
+                        if (reflectionResult.shouldReplan()) {
+
+                                if (replanCount >= maxReplans) {
+
+                                        return finishWithFallback(
+                                                        current,
+                                                        "Maximum replans reached");
+                                }
+
+                                replanCount++;
+                        }
+
+                        /*
+                         * 7. Apply Reflection Decision.
+                         */
+                        current = handleReflectionDecision(
+                                        current,
+                                        runningTask,
+                                        reflectionResult);
+
+                        /*
+                         * 当前任务已经正常完成，
+                         * 不再需要保存它的 Retry 计数。
+                         */
+                        if (reflectionResult.shouldContinue()
+                                        || reflectionResult.shouldFinish()) {
+
+                                retryCounts.remove(
+                                                runningTask.getId());
+                        }
+
+                        /*
+                         * Replanning 得到的是新的 Plan。
+                         *
+                         * 新 Plan 的 Task 即使 ID 与旧 Plan 相同，
+                         * 也应重新获得完整 Retry Budget。
+                         */
+                        if (reflectionResult.shouldReplan()) {
+
+                                retryCounts.clear();
+                        }
+
+                        /*
+                         * FINISH decision is terminal.
+                         */
+                        if (current.getStatus() == AgentStatus.FINISHED) {
+
+                                return current;
+                        }
+                }
+
+                /*
+                 * 所有 Pending Task 已经执行完成，
+                 * 但没有显式产生 FINAL_ANSWER。
+                 */
+                if (!hasPendingTask(
+                                current)) {
+
+                        current = ensureFinalAnswer(
+                                        current);
+
+                        return markFinished(
+                                        current);
+                }
+
+                /*
+                 * maxSteps exhausted.
+                 *
+                 * 不再返回 RUNNING，
+                 * 而是根据已有上下文生成 best-effort answer，
+                 * 然后安全结束。
+                 */
+                return finishWithFallback(
+                                current,
+                                "Maximum execution steps reached: "
+                                                + maxSteps);
+        }
 
         /*
-         * 第一轮：
-         *
-         * Reason
-         * ↓
-         * Planning
-         * ↓
-         * ToolExecution
+         * =========================================================
+         * Action Execution Result
+         * =========================================================
          */
-        AgentContext current = agentPipeline.execute(
-                context);
 
-        int executedSteps = current.observationCount();
+        private AgentContext applyExecutionResult(
+                        AgentContext context,
+                        AgentTask task,
+                        AgentActionExecutionResult result) {
 
-        /*
-         * 如果第一轮 Tool 已经失败，
-         * 当前 Sprint 直接终止 Agent。
-         *
-         * Retry / Reflection 留到 Day14。
-         */
-        if (hasFailedTask(current)) {
-            return markFailed(current);
+                Objects.requireNonNull(
+                                result,
+                                "AgentActionExecutionResult must not be null");
+
+                return switch (result.getActionType()) {
+
+                        case TOOL ->
+                                applyToolResult(
+                                                context,
+                                                task,
+                                                result.getObservation());
+
+                        case REASON ->
+                                applyReasonResult(
+                                                context,
+                                                task,
+                                                result.getContent());
+
+                        case FINAL_ANSWER ->
+                                applyFinalAnswerResult(
+                                                context,
+                                                task,
+                                                result.getContent());
+                };
+        }
+
+        private AgentContext applyToolResult(
+                        AgentContext context,
+                        AgentTask task,
+                        ToolObservation observation) {
+
+                Objects.requireNonNull(
+                                observation,
+                                "ToolObservation must not be null");
+
+                AgentTaskStatus newStatus = observation.isSuccess()
+                                ? AgentTaskStatus.COMPLETED
+                                : AgentTaskStatus.FAILED;
+
+                AgentContext updated = updateTaskStatus(
+                                context,
+                                task.getId(),
+                                newStatus)
+                                .appendObservation(
+                                                observation);
+
+                return updated.appendExecutionLog(
+                                observation.isSuccess()
+                                                ? "Tool action completed: "
+                                                                + task.getId()
+                                                : "Tool action failed: "
+                                                                + task.getId());
+        }
+
+        private AgentContext applyReasonResult(
+                        AgentContext context,
+                        AgentTask task,
+                        String content) {
+
+                RuntimeReasonObservation observation = RuntimeReasonObservation.of(
+                                task.getId(),
+                                content);
+
+                return updateTaskStatus(
+                                context,
+                                task.getId(),
+                                AgentTaskStatus.COMPLETED)
+                                .appendRuntimeReasonObservation(
+                                                observation)
+                                .appendExecutionLog(
+                                                "Reason action completed: "
+                                                                + task.getId());
+        }
+
+        private AgentContext applyFinalAnswerResult(
+                        AgentContext context,
+                        AgentTask task,
+                        String content) {
+
+                return updateTaskStatus(
+                                context,
+                                task.getId(),
+                                AgentTaskStatus.COMPLETED)
+                                .withFinalAnswer(
+                                                content)
+                                .appendExecutionLog(
+                                                "Final answer generated: "
+                                                                + task.getId());
         }
 
         /*
-         * 后续轮次：
-         *
-         * 只继续执行 ToolExecutionOperator，
-         * 不重新 Reason / Planning。
+         * =========================================================
+         * Reflection Decision
+         * =========================================================
          */
-        while (hasPendingTask(current)
-                && executedSteps < maxSteps) {
 
-            current = toolExecutionOperator.execute(
-                    current);
+        private AgentContext handleReflectionDecision(
+                        AgentContext context,
+                        AgentTask task,
+                        ReflectionResult reflectionResult) {
 
-            executedSteps++;
+                Objects.requireNonNull(
+                                reflectionResult,
+                                "ReflectionResult must not be null");
 
-            if (hasFailedTask(current)) {
-                return markFailed(current);
-            }
+                return switch (reflectionResult.getDecision()) {
+
+                        case CONTINUE ->
+                                handleContinue(
+                                                context,
+                                                task,
+                                                reflectionResult);
+
+                        case RETRY ->
+                                handleRetry(
+                                                context,
+                                                task,
+                                                reflectionResult);
+
+                        case REPLAN ->
+                                handleReplan(
+                                                context,
+                                                task,
+                                                reflectionResult);
+
+                        case FINISH ->
+                                handleFinish(
+                                                context,
+                                                reflectionResult);
+                };
+        }
+
+        private AgentContext handleContinue(
+                        AgentContext context,
+                        AgentTask task,
+                        ReflectionResult reflectionResult) {
+
+                return context.appendExecutionLog(
+                                "Reflection CONTINUE: "
+                                                + task.getId()
+                                                + " - "
+                                                + reflectionResult.getSummary());
+        }
+
+        private AgentContext handleRetry(
+                        AgentContext context,
+                        AgentTask task,
+                        ReflectionResult reflectionResult) {
+
+                AgentContext updated = updateTaskStatus(
+                                context,
+                                task.getId(),
+                                AgentTaskStatus.PENDING);
+
+                return updated.appendExecutionLog(
+                                "Reflection RETRY: "
+                                                + task.getId()
+                                                + " - "
+                                                + reflectionResult.getSummary());
+        }
+
+        private AgentContext handleReplan(
+                        AgentContext context,
+                        AgentTask task,
+                        ReflectionResult reflectionResult) {
+
+                AgentPlan replanned = replanningService.replan(
+                                context,
+                                reflectionResult);
+
+                Objects.requireNonNull(
+                                replanned,
+                                "Replanned AgentPlan must not be null");
+
+                return context.withAgentPlan(
+                                replanned)
+                                .appendExecutionLog(
+                                                "Reflection REPLAN: "
+                                                                + task.getId()
+                                                                + " - "
+                                                                + reflectionResult.getSummary());
+        }
+
+        private AgentContext handleFinish(
+                        AgentContext context,
+                        ReflectionResult reflectionResult) {
+
+                AgentContext updated = ensureFinalAnswer(
+                                context)
+                                .appendExecutionLog(
+                                                "Reflection FINISH: "
+                                                                + reflectionResult.getSummary());
+
+                return markFinished(
+                                updated);
         }
 
         /*
-         * 所有 Task 已完成。
+         * =========================================================
+         * Runtime Guardrail
+         * =========================================================
          */
-        if (!hasPendingTask(current)) {
-            return markFinished(current);
+
+        private AgentContext finishWithFallback(
+                        AgentContext context,
+                        String reason) {
+
+                AgentContext updated = context.appendExecutionLog(
+                                "Runtime guardrail triggered: "
+                                                + reason);
+
+                updated = ensureFinalAnswer(
+                                updated);
+
+                return markFinished(
+                                updated);
         }
 
         /*
-         * 还有 Pending Task，
-         * 但 maxSteps 已经耗尽。
-         *
-         * 当前保持 RUNNING。
-         *
-         * Day14 再引入更完整的
-         * MAX_STEPS_EXCEEDED / Runtime Error Policy。
+         * =========================================================
+         * Runtime Helpers
+         * =========================================================
          */
-        return current;
-    }
 
-    private boolean hasPendingTask(
-            AgentContext context) {
+        private AgentContext ensureFinalAnswer(
+                        AgentContext context) {
 
-        return context.getAgentPlan()
-                .nextPendingTask()
-                .isPresent();
-    }
+                if (context.hasFinalAnswer()) {
+                        return context;
+                }
 
-    private boolean hasFailedTask(
-            AgentContext context) {
+                String finalAnswer = finalAnswerService.generate(
+                                context);
 
-        return context.getAgentPlan()
-                .getTasks()
-                .stream()
-                .anyMatch(
-                        task -> task.getStatus() == com.quince.lawyeraiassistant.agent.model.AgentTaskStatus.FAILED);
-    }
-
-    private AgentContext markFinished(
-            AgentContext context) {
-
-        if (context.getStatus() == AgentStatus.FINISHED) {
-            return context;
+                return context.withFinalAnswer(
+                                finalAnswer)
+                                .appendExecutionLog(
+                                                "Final answer generated");
         }
 
-        return context.toBuilder()
-                .status(
-                        AgentStatus.FINISHED)
-                .build()
-                .appendExecutionLog(
-                        "Agent finished");
-    }
+        private AgentContext updateTaskStatus(
+                        AgentContext context,
+                        String taskId,
+                        AgentTaskStatus status) {
 
-    private AgentContext markFailed(
-            AgentContext context) {
+                AgentPlan updatedPlan = context.getAgentPlan()
+                                .updateTaskStatus(
+                                                taskId,
+                                                status);
 
-        if (context.getStatus() == AgentStatus.FAILED) {
-            return context;
+                return context.withAgentPlan(
+                                updatedPlan);
         }
 
-        return context.toBuilder()
-                .status(
-                        AgentStatus.FAILED)
-                .build()
-                .appendExecutionLog(
-                        "Agent failed");
-    }
+        private boolean hasPendingTask(
+                        AgentContext context) {
+
+                return context.getAgentPlan()
+                                .nextPendingTask()
+                                .isPresent();
+        }
+
+        private AgentContext markFinished(
+                        AgentContext context) {
+
+                if (context.getStatus() == AgentStatus.FINISHED) {
+
+                        return context;
+                }
+
+                return context.toBuilder()
+                                .status(
+                                                AgentStatus.FINISHED)
+                                .build()
+                                .appendExecutionLog(
+                                                AGENT_FINISHED_LOG);
+        }
 }

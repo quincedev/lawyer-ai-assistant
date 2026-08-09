@@ -72,4 +72,11 @@ logging:
 
 agent:
   runtime:
+    # 单次 Agent Runtime 最多执行多少个 Action
     max-steps: 10
+
+    # 同一个 Task 最多允许 RETRY 的次数
+    max-retries-per-task: 2
+
+    # 单次 Agent Runtime 最多允许 REPLAN 的次数
+    max-replans: 2

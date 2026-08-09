@@ -1,8 +1,8 @@
 package com.quince.lawyeraiassistant.agent.action;
 
+import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
-import com.quince.lawyeraiassistant.agent.model.ToolAction;
 
 /**
  * Agent Action Selection SPI。
@@ -21,7 +21,7 @@ public interface AgentActionSelector {
      * @param task    当前待执行 Task
      * @return ToolAction
      */
-    ToolAction select(
+    AgentAction select(
             AgentContext context,
             AgentTask task);
 }

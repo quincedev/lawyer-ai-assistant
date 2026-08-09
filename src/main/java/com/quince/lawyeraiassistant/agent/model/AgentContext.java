@@ -87,6 +87,10 @@ public final class AgentContext {
          */
         private final List<String> executionLogs;
 
+        private final String finalAnswer;
+
+        private final List<RuntimeReasonObservation> runtimeReasonObservations;
+
         @Builder(toBuilder = true)
         private AgentContext(
                         String goal,
@@ -94,7 +98,9 @@ public final class AgentContext {
                         AgentPlan agentPlan,
                         List<ToolObservation> observations,
                         AgentStatus status,
-                        List<String> executionLogs) {
+                        List<String> executionLogs,
+                        String finalAnswer,
+                        List<RuntimeReasonObservation> runtimeReasonObservations) {
 
                 this.goal = normalizeGoal(
                                 goal);
@@ -114,6 +120,10 @@ public final class AgentContext {
 
                 this.executionLogs = normalizeExecutionLogs(
                                 executionLogs);
+
+                this.finalAnswer = normalizeFinalAnswer(finalAnswer);
+
+                this.runtimeReasonObservations = normalizeRuntimeReasonObservations(runtimeReasonObservations);
         }
 
         /**
@@ -285,6 +295,25 @@ public final class AgentContext {
                                 .build();
         }
 
+        public AgentContext appendRuntimeReasonObservation(
+                        RuntimeReasonObservation observation) {
+
+                Objects.requireNonNull(
+                                observation,
+                                "RuntimeReasonObservation must not be null");
+
+                List<RuntimeReasonObservation> updated = new ArrayList<>(
+                                runtimeReasonObservations);
+
+                updated.add(
+                                observation);
+
+                return toBuilder()
+                                .runtimeReasonObservations(
+                                                updated)
+                                .build();
+        }
+
         private static String normalizeGoal(
                         String goal) {
 
@@ -357,5 +386,59 @@ public final class AgentContext {
                 }
 
                 return normalizedLog;
+        }
+
+        private static String normalizeFinalAnswer(
+                        String finalAnswer) {
+
+                if (finalAnswer == null) {
+                        return null;
+                }
+
+                String normalized = finalAnswer.trim();
+
+                if (normalized.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                        "Final answer must not be blank");
+                }
+
+                return normalized;
+        }
+
+        public boolean hasFinalAnswer() {
+                return finalAnswer != null;
+        }
+
+        public AgentContext withFinalAnswer(
+                        String finalAnswer) {
+
+                Objects.requireNonNull(
+                                finalAnswer,
+                                "Final answer must not be null");
+
+                return toBuilder()
+                                .finalAnswer(finalAnswer)
+                                .build();
+        }
+
+        public boolean hasRuntimeReasonObservations() {
+                return !runtimeReasonObservations.isEmpty();
+        }
+
+        public int runtimeReasonObservationCount() {
+                return runtimeReasonObservations.size();
+        }
+
+        private static List<RuntimeReasonObservation> normalizeRuntimeReasonObservations(
+                        List<RuntimeReasonObservation> observations) {
+
+                if (observations == null
+                                || observations.isEmpty()) {
+
+                        return List.of();
+                }
+
+                return List.copyOf(
+                                observations);
         }
 }

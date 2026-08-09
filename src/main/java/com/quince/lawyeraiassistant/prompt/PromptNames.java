@@ -52,6 +52,26 @@ public final class PromptNames {
          */
         public static final String REFUSE_RULES = "refuse-rules";
 
+        /**
+         * Agent Final Answer 阶段 Prompt。
+         */
+        public static final String AGENT_FINAL_ANSWER = "agent-final-answer";
+
+        /**
+         * Agent Reflection 阶段 Prompt。
+         */
+        public static final String AGENT_REFLECTION = "agent-reflection";
+
+        /**
+         * Agent Replanning 阶段 Prompt。
+         */
+        public static final String AGENT_REPLANNING = "agent-replanning";
+
+        /**
+         * Agent Runtime Reason 阶段 Prompt。
+         */
+        public static final String AGENT_RUNTIME_REASON = "agent-runtime-reason";
+
         private PromptNames() {
                 throw new IllegalStateException(
                                 "PromptNames is a constants class and cannot be instantiated");

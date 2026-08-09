@@ -170,6 +170,7 @@ class AgentResponseTest {
                                 "用户希望分析劳动合同。",
                                 plan,
                                 observations,
+                                null,
                                 AgentStatus.RUNNING,
                                 logs);
 
@@ -228,5 +229,34 @@ class AgentResponseTest {
                 assertEquals(
                                 "AgentContext must not be null",
                                 exception.getMessage());
+        }
+
+        @Test
+        void shouldMapFinalAnswerFromContext() {
+
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withFinalAnswer(
+                                                "根据现有材料，合同存在以下风险。");
+
+                AgentResponse response = AgentResponse.from(
+                                context);
+
+                assertEquals(
+                                "根据现有材料，合同存在以下风险。",
+                                response.finalAnswer());
+        }
+
+        @Test
+        void shouldAllowNullFinalAnswerBeforeGeneration() {
+
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
+
+                AgentResponse response = AgentResponse.from(
+                                context);
+
+                assertNull(
+                                response.finalAnswer());
         }
 }

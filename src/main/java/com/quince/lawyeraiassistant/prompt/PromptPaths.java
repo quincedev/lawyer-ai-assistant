@@ -42,6 +42,26 @@ public final class PromptPaths {
      */
     public static final String AGENT_PLANNING = "classpath:prompts/agent/planning.st";
 
+    /**
+     * Agent Final Answer Prompt。
+     */
+    public static final String AGENT_FINAL_ANSWER = "classpath:prompts/agent/final-answer.st";
+
+    /**
+     * Agent Reflection Prompt。
+     */
+    public static final String AGENT_REFLECTION = "classpath:prompts/agent/reflection.st";
+
+    /**
+     * Agent Replanning Prompt。
+     */
+    public static final String AGENT_REPLANNING = "classpath:prompts/agent/replanning.st";
+
+    /**
+     * Agent Runtime Reason Prompt。
+     */
+    public static final String AGENT_RUNTIME_REASON = "classpath:prompts/agent/runtime-reason.st";
+
     private PromptPaths() {
         throw new IllegalStateException(
                 "PromptPaths is a constants class and cannot be instantiated");

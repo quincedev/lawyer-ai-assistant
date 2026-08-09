@@ -9,7 +9,6 @@ import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.core.Ordered;
-import org.springframework.stereotype.Component;
 
 //@Component
 public class LoggingAdvisor implements BaseAdvisor {

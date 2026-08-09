@@ -2,7 +2,6 @@ package com.quince.lawyeraiassistant.agent.operator;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /**
  * Dummy Planning Operator。

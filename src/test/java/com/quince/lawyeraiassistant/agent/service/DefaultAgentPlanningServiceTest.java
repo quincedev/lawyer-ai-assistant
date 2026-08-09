@@ -1,9 +1,10 @@
 package com.quince.lawyeraiassistant.agent.service;
 
 import com.quince.lawyeraiassistant.agent.model.AgentPlan;
-import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
-import com.quince.lawyeraiassistant.agent.model.ReasonResult;
+import com.quince.lawyeraiassistant.agent.model.AgentTask;
+import com.quince.lawyeraiassistant.agent.parser.AgentPlanParser;
 import com.quince.lawyeraiassistant.agent.prompt.model.PlanningPromptContext;
+import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.prompt.builder.PromptBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,234 +13,221 @@ import org.springframework.ai.chat.client.ChatClient.CallResponseSpec;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DefaultAgentPlanningServiceTest {
 
-    private ChatClient chatClient;
+        private ChatClient chatClient;
 
-    private PromptBuilder promptBuilder;
+        private PromptBuilder promptBuilder;
 
-    private ChatClientRequestSpec requestSpec;
+        private AgentPlanParser agentPlanParser;
 
-    private CallResponseSpec responseSpec;
+        private ChatClientRequestSpec requestSpec;
 
-    private DefaultAgentPlanningService planningService;
+        private CallResponseSpec responseSpec;
 
-    @BeforeEach
-    void setUp() {
-        chatClient = mock(ChatClient.class);
+        private DefaultAgentPlanningService planningService;
 
-        promptBuilder = mock(PromptBuilder.class);
+        @BeforeEach
+        void setUp() {
 
-        requestSpec = mock(ChatClientRequestSpec.class);
+                chatClient = mock(
+                                ChatClient.class);
 
-        responseSpec = mock(CallResponseSpec.class);
+                promptBuilder = mock(
+                                PromptBuilder.class);
 
-        planningService = new DefaultAgentPlanningService(
-                chatClient,
-                promptBuilder);
-    }
+                agentPlanParser = mock(
+                                AgentPlanParser.class);
 
-    @Test
-    void shouldGenerateAgentPlan() {
-        PlanningPromptContext context = PlanningPromptContext.from(
-                "分析劳动合同并生成律师意见书",
-                ReasonResult.from(
-                        "用户希望分析劳动合同并生成律师意见书。"));
+                requestSpec = mock(
+                                ChatClientRequestSpec.class);
 
-        Prompt prompt = mock(Prompt.class);
+                responseSpec = mock(
+                                CallResponseSpec.class);
 
-        when(
-                promptBuilder.buildPlanning(
-                        context))
-                .thenReturn(prompt);
+                planningService = new DefaultAgentPlanningService(
+                                chatClient,
+                                promptBuilder,
+                                agentPlanParser);
+        }
 
-        when(
-                chatClient.prompt(prompt)).thenReturn(requestSpec);
+        @Test
+        void shouldGenerateAgentPlan() {
 
-        when(
-                requestSpec.call()).thenReturn(responseSpec);
+                PlanningPromptContext context = PlanningPromptContext.from(
+                                "分析劳动合同并生成律师意见书",
+                                ReasonResult.from(
+                                                "用户希望分析劳动合同并生成律师意见书。"));
 
-        when(
-                responseSpec.content()).thenReturn(
-                        """
+                Prompt prompt = mock(
+                                Prompt.class);
+
+                String content = """
                                 task-1|读取劳动合同
                                 task-2|识别法律风险
                                 task-3|生成律师意见书
-                                """);
+                                """;
 
-        AgentPlan result = planningService.plan(
-                context);
+                AgentPlan expectedPlan = AgentPlan.from(
+                                List.of(
+                                                AgentTask.pending(
+                                                                "task-1",
+                                                                "读取劳动合同"),
+                                                AgentTask.pending(
+                                                                "task-2",
+                                                                "识别法律风险"),
+                                                AgentTask.pending(
+                                                                "task-3",
+                                                                "生成律师意见书")));
 
-        assertEquals(
-                3,
-                result.taskCount());
+                when(
+                                promptBuilder.buildPlanning(
+                                                context))
+                                .thenReturn(
+                                                prompt);
 
-        assertEquals(
-                "task-1",
-                result.getTasks()
-                        .get(0)
-                        .getId());
+                when(
+                                chatClient.prompt(
+                                                prompt))
+                                .thenReturn(
+                                                requestSpec);
 
-        assertEquals(
-                "读取劳动合同",
-                result.getTasks()
-                        .get(0)
-                        .getDescription());
+                when(
+                                requestSpec.call())
+                                .thenReturn(
+                                                responseSpec);
 
-        assertEquals(
-                AgentTaskStatus.PENDING,
-                result.getTasks()
-                        .get(0)
-                        .getStatus());
-    }
+                when(
+                                responseSpec.content())
+                                .thenReturn(
+                                                content);
 
-    @Test
-    void shouldIgnoreBlankLines() {
-        PlanningPromptContext context = createContext();
+                when(
+                                agentPlanParser.parse(
+                                                content))
+                                .thenReturn(
+                                                expectedPlan);
 
-        Prompt prompt = mock(Prompt.class);
+                AgentPlan result = planningService.plan(
+                                context);
 
-        when(
-                promptBuilder.buildPlanning(
-                        context))
-                .thenReturn(prompt);
+                assertSame(
+                                expectedPlan,
+                                result);
 
-        when(
-                chatClient.prompt(prompt)).thenReturn(requestSpec);
+                verify(
+                                agentPlanParser)
+                                .parse(
+                                                content);
+        }
 
-        when(
-                requestSpec.call()).thenReturn(responseSpec);
+        @Test
+        void shouldRejectNullContext() {
 
-        when(
-                responseSpec.content()).thenReturn(
-                        """
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> planningService.plan(
+                                                null));
 
-                                task-1|读取劳动合同
+                assertEquals(
+                                "PlanningPromptContext must not be null",
+                                exception.getMessage());
+        }
 
-                                task-2|识别法律风险
+        @Test
+        void shouldRejectBlankPlanningResult() {
 
-                                """);
+                PlanningPromptContext context = createContext();
 
-        AgentPlan result = planningService.plan(
-                context);
+                Prompt prompt = mock(
+                                Prompt.class);
 
-        assertEquals(
-                2,
-                result.taskCount());
-    }
+                when(
+                                promptBuilder.buildPlanning(
+                                                context))
+                                .thenReturn(
+                                                prompt);
 
-    @Test
-    void shouldRejectNullContext() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> planningService.plan(null));
+                when(
+                                chatClient.prompt(
+                                                prompt))
+                                .thenReturn(
+                                                requestSpec);
 
-        assertEquals(
-                "PlanningPromptContext must not be null",
-                exception.getMessage());
-    }
+                when(
+                                requestSpec.call())
+                                .thenReturn(
+                                                responseSpec);
 
-    @Test
-    void shouldRejectBlankPlanningResult() {
-        PlanningPromptContext context = createContext();
+                when(
+                                responseSpec.content())
+                                .thenReturn(
+                                                "   ");
 
-        Prompt prompt = mock(Prompt.class);
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> planningService.plan(
+                                                context));
 
-        when(
-                promptBuilder.buildPlanning(
-                        context))
-                .thenReturn(prompt);
+                assertEquals(
+                                "Planning result must not be blank",
+                                exception.getMessage());
+        }
 
-        when(
-                chatClient.prompt(prompt)).thenReturn(requestSpec);
+        @Test
+        void shouldRejectNullPlanningResult() {
 
-        when(
-                requestSpec.call()).thenReturn(responseSpec);
+                PlanningPromptContext context = createContext();
 
-        when(
-                responseSpec.content()).thenReturn("   ");
+                Prompt prompt = mock(
+                                Prompt.class);
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> planningService.plan(
-                        context));
+                when(
+                                promptBuilder.buildPlanning(
+                                                context))
+                                .thenReturn(
+                                                prompt);
 
-        assertEquals(
-                "Planning result must not be blank",
-                exception.getMessage());
-    }
+                when(
+                                chatClient.prompt(
+                                                prompt))
+                                .thenReturn(
+                                                requestSpec);
 
-    @Test
-    void shouldRejectInvalidTaskFormat() {
-        PlanningPromptContext context = createContext();
+                when(
+                                requestSpec.call())
+                                .thenReturn(
+                                                responseSpec);
 
-        Prompt prompt = mock(Prompt.class);
+                when(
+                                responseSpec.content())
+                                .thenReturn(
+                                                null);
 
-        when(
-                promptBuilder.buildPlanning(
-                        context))
-                .thenReturn(prompt);
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> planningService.plan(
+                                                context));
 
-        when(
-                chatClient.prompt(prompt)).thenReturn(requestSpec);
+                assertEquals(
+                                "Planning result must not be blank",
+                                exception.getMessage());
+        }
 
-        when(
-                requestSpec.call()).thenReturn(responseSpec);
+        private PlanningPromptContext createContext() {
 
-        when(
-                responseSpec.content()).thenReturn(
-                        "读取劳动合同");
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> planningService.plan(
-                        context));
-
-        assertEquals(
-                "Invalid planning task format: 读取劳动合同",
-                exception.getMessage());
-    }
-
-    @Test
-    void shouldRejectEmptyTaskDescription() {
-        PlanningPromptContext context = createContext();
-
-        Prompt prompt = mock(Prompt.class);
-
-        when(
-                promptBuilder.buildPlanning(
-                        context))
-                .thenReturn(prompt);
-
-        when(
-                chatClient.prompt(prompt)).thenReturn(requestSpec);
-
-        when(
-                requestSpec.call()).thenReturn(responseSpec);
-
-        when(
-                responseSpec.content()).thenReturn(
-                        "task-1|   ");
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> planningService.plan(
-                        context));
-
-        assertEquals(
-                "Invalid planning task: task-1|",
-                exception.getMessage());
-    }
-
-    private PlanningPromptContext createContext() {
-        return PlanningPromptContext.from(
-                "分析劳动合同",
-                ReasonResult.from(
-                        "用户希望分析劳动合同。"));
-    }
+                return PlanningPromptContext.from(
+                                "分析劳动合同",
+                                ReasonResult.from(
+                                                "用户希望分析劳动合同。"));
+        }
 }

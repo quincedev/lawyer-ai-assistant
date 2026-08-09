@@ -3,7 +3,6 @@ package com.quince.lawyeraiassistant.agent.operator;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 /**
  * Dummy Reason Operator。

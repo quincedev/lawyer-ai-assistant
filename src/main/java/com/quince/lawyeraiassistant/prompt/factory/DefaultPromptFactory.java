@@ -76,4 +76,45 @@ public class DefaultPromptFactory
                                         "Prompt name must not be blank");
                 }
         }
+
+        /**
+         * 获取 Agent Final Answer Prompt。
+         */
+        @Override
+        public PromptFragment agentFinalAnswer() {
+
+                return get(
+                                PromptDefinition.AGENT_FINAL_ANSWER
+                                                .getName());
+        }
+
+        /**
+         * 获取 Agent Reflection Prompt。
+         */
+        @Override
+        public PromptFragment agentReflection() {
+
+                return get(
+                                PromptDefinition.AGENT_REFLECTION
+                                                .getName());
+        }
+
+        /**
+         * 获取 Agent Replanning Prompt。
+         */
+        @Override
+        public PromptFragment agentReplanning() {
+
+                return get(
+                                PromptDefinition.AGENT_REPLANNING
+                                                .getName());
+        }
+
+        @Override
+        public PromptFragment agentRuntimeReason() {
+
+                return get(
+                                PromptDefinition.AGENT_RUNTIME_REASON
+                                                .getName());
+        }
 }

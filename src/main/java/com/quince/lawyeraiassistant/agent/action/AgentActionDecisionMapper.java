@@ -1,74 +1,80 @@
 package com.quince.lawyeraiassistant.agent.action;
 
+import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionDecision;
-import com.quince.lawyeraiassistant.agent.model.AgentTask;
+import com.quince.lawyeraiassistant.agent.model.AgentActionType;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalKnowledgeTool;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * 将 LLM Action Decision 转换为 Runtime ToolAction。
- */
 @Component
 public class AgentActionDecisionMapper {
 
-    public ToolAction map(
-            AgentTask task,
-            AgentActionDecision decision) {
+        public AgentAction map(
+                        String taskId,
+                        AgentActionDecision decision) {
 
-        Objects.requireNonNull(
-                task,
-                "AgentTask must not be null");
+                Objects.requireNonNull(
+                                decision,
+                                "AgentActionDecision must not be null");
 
-        Objects.requireNonNull(
-                decision,
-                "Agent action decision must not be null");
+                AgentActionType actionType = Objects.requireNonNull(
+                                decision.actionType(),
+                                "AgentActionType must not be null");
 
-        String toolName = normalizeToolName(
-                decision.toolName());
+                return switch (actionType) {
 
-        validateSupportedTool(
-                toolName);
+                        case TOOL ->
+                                mapToolAction(
+                                                taskId,
+                                                decision);
 
-        Map<String, Object> arguments = decision.arguments() == null
-                ? Map.of()
-                : decision.arguments();
+                        case REASON ->
+                                AgentAction.reason(
+                                                taskId);
 
-        return ToolAction.of(
-                task.getId(),
-                toolName,
-                arguments);
-    }
-
-    private String normalizeToolName(
-            String toolName) {
-
-        Objects.requireNonNull(
-                toolName,
-                "Agent action decision toolName must not be null");
-
-        String normalized = toolName.trim();
-
-        if (normalized.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Agent action decision toolName must not be blank");
+                        case FINAL_ANSWER ->
+                                AgentAction.finalAnswer(
+                                                taskId);
+                };
         }
 
-        return normalized;
-    }
+        private AgentAction mapToolAction(
+                        String taskId,
+                        AgentActionDecision decision) {
 
-    private void validateSupportedTool(
-            String toolName) {
+                String toolName = normalizeToolName(
+                                decision.toolName());
 
-        if (!LegalKnowledgeTool.TOOL_NAME.equals(
-                toolName)) {
+                Map<String, Object> arguments = decision.arguments() == null
+                                ? Map.of()
+                                : decision.arguments();
 
-            throw new IllegalArgumentException(
-                    "Unsupported Agent tool: "
-                            + toolName);
+                ToolAction toolAction = ToolAction.of(
+                                taskId,
+                                toolName,
+                                arguments);
+
+                return AgentAction.tool(
+                                toolAction);
         }
-    }
+
+        private String normalizeToolName(
+                        String toolName) {
+
+                Objects.requireNonNull(
+                                toolName,
+                                "Tool name must not be null");
+
+                String normalized = toolName.trim();
+
+                if (normalized.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                        "Tool name must not be blank");
+                }
+
+                return normalized;
+        }
 }

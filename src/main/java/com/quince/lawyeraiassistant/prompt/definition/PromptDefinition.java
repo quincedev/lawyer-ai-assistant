@@ -43,9 +43,41 @@ public enum PromptDefinition {
      * Agent Planning 阶段 Prompt。
      */
     AGENT_PLANNING(
-        PromptNames.AGENT_PLANNING,
-        PromptPaths.AGENT_PLANNING,
-        "v1");
+            PromptNames.AGENT_PLANNING,
+            PromptPaths.AGENT_PLANNING,
+            "v1"),
+
+    /**
+     * Agent Final Answer 阶段 Prompt。
+     */
+    AGENT_FINAL_ANSWER(
+            PromptNames.AGENT_FINAL_ANSWER,
+            PromptPaths.AGENT_FINAL_ANSWER,
+            "v1"),
+
+    /**
+     * Agent Reflection 阶段 Prompt。
+     */
+    AGENT_REFLECTION(
+            PromptNames.AGENT_REFLECTION,
+            PromptPaths.AGENT_REFLECTION,
+            "v1"),
+
+    /**
+     * Agent Replanning 阶段 Prompt。
+     */
+    AGENT_REPLANNING(
+            PromptNames.AGENT_REPLANNING,
+            PromptPaths.AGENT_REPLANNING,
+            "v1"),
+
+    /**
+     * Agent Runtime Reason 阶段 Prompt。
+     */
+    AGENT_RUNTIME_REASON(
+            PromptNames.AGENT_RUNTIME_REASON,
+            PromptPaths.AGENT_RUNTIME_REASON,
+            "v1");
 
     private final String name;
 

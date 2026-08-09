@@ -13,6 +13,7 @@ import java.util.Objects;
  * @param reasonSummary Reason 阶段生成的目标理解摘要
  * @param plan          Planning 阶段生成的任务列表
  * @param observations  Tool 执行阶段产生的 Observation
+ * @param finalAnswer   Agent 最终生成的用户答案
  * @param status        Agent 当前状态
  * @param executionLogs Agent 执行日志
  */
@@ -25,6 +26,8 @@ public record AgentResponse(
                 List<AgentTaskResponse> plan,
 
                 List<ToolObservationResponse> observations,
+
+                String finalAnswer,
 
                 AgentStatus status,
 
@@ -85,6 +88,7 @@ public record AgentResponse(
                                 reasonSummary,
                                 plan,
                                 observations,
+                                context.getFinalAnswer(),
                                 context.getStatus(),
                                 context.getExecutionLogs());
         }

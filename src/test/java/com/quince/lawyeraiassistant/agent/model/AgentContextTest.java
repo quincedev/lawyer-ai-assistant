@@ -849,4 +849,47 @@ class AgentContextTest {
                                                 .observations(observations)
                                                 .build());
         }
+
+        @Test
+        void shouldAppendRuntimeReasonObservationWithoutModifyingOriginalContext() {
+
+                AgentContext originalContext = AgentContext.from(
+                                "分析劳动合同");
+
+                RuntimeReasonObservation observation = RuntimeReasonObservation.of(
+                                "task-1",
+                                "现有材料不足以确认解除是否合法");
+
+                AgentContext updatedContext = originalContext.appendRuntimeReasonObservation(
+                                observation);
+
+                assertNotSame(
+                                originalContext,
+                                updatedContext);
+
+                assertTrue(
+                                originalContext.getRuntimeReasonObservations()
+                                                .isEmpty());
+
+                assertEquals(
+                                List.of(
+                                                observation),
+                                updatedContext.getRuntimeReasonObservations());
+        }
+
+        @Test
+        void shouldRejectNullRuntimeReasonObservationWhenAppending() {
+
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> context.appendRuntimeReasonObservation(
+                                                null));
+
+                assertEquals(
+                                "RuntimeReasonObservation must not be null",
+                                exception.getMessage());
+        }
 }

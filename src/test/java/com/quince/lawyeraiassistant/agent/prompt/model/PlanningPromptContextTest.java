@@ -1,7 +1,5 @@
 package com.quince.lawyeraiassistant.agent.prompt.model;
 
-import com.quince.lawyeraiassistant.agent.model.ReasonResult;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -9,84 +7,71 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class PlanningPromptContextTest {
+class FinalAnswerPromptContextTest {
 
-    @Test
-    void shouldCreatePlanningPromptContext() {
-        ReasonResult reasonResult = ReasonResult.from(
-                "用户希望分析劳动合同。");
+        @Test
+        void shouldNormalizeOptionalValues() {
 
-        PlanningPromptContext context = PlanningPromptContext.from(
-                "分析劳动合同",
-                reasonResult);
+                FinalAnswerPromptContext context = new FinalAnswerPromptContext(
+                                "分析劳动合同",
+                                null,
+                                null,
+                                null);
 
-        assertEquals(
-                "分析劳动合同",
-                context.getGoal());
+                assertEquals(
+                                "分析劳动合同",
+                                context.goal());
 
-        assertEquals(
-                reasonResult,
-                context.getReasonResult());
+                assertEquals(
+                                "无",
+                                context.reasonSummary());
 
-        assertEquals(
-                Map.of(
-                        "goal",
-                        "分析劳动合同",
-                        "reasonSummary",
-                        "用户希望分析劳动合同。"),
-                context.toVariables());
-    }
+                assertEquals(
+                                "无",
+                                context.plan());
 
-    @Test
-    void shouldTrimGoal() {
-        PlanningPromptContext context = PlanningPromptContext.from(
-                "  分析劳动合同  ",
-                ReasonResult.from(
-                        "用户希望分析劳动合同。"));
+                assertEquals(
+                                "无",
+                                context.observations());
+        }
 
-        assertEquals(
-                "分析劳动合同",
-                context.getGoal());
-    }
+        @Test
+        void shouldExposeTemplateVariables() {
 
-    @Test
-    void shouldRejectNullGoal() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> PlanningPromptContext.from(
-                        null,
-                        ReasonResult.from(
-                                "测试")));
+                FinalAnswerPromptContext context = new FinalAnswerPromptContext(
+                                "分析劳动合同",
+                                "分析合同风险",
+                                "task-1",
+                                "法律检索结果");
 
-        assertEquals(
-                "Goal must not be null",
-                exception.getMessage());
-    }
+                Map<String, Object> variables = context.toVariables();
 
-    @Test
-    void shouldRejectBlankGoal() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> PlanningPromptContext.from(
-                        "   ",
-                        ReasonResult.from(
-                                "测试")));
+                assertEquals(
+                                "分析劳动合同",
+                                variables.get("goal"));
 
-        assertEquals(
-                "Goal must not be blank",
-                exception.getMessage());
-    }
+                assertEquals(
+                                "分析合同风险",
+                                variables.get("reasonSummary"));
 
-    @Test
-    void shouldRejectNullReasonResult() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> PlanningPromptContext.from(
-                        "分析劳动合同",
-                        null));
+                assertEquals(
+                                "task-1",
+                                variables.get("plan"));
 
-        assertEquals(
-                "ReasonResult must not be null",
-                exception.getMessage());
-    }
+                assertEquals(
+                                "法律检索结果",
+                                variables.get("observations"));
+        }
+
+        @Test
+        void shouldRejectBlankGoal() {
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new FinalAnswerPromptContext(
+                                                "   ",
+                                                null,
+                                                null,
+                                                null));
+        }
 }

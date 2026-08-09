@@ -40,4 +40,32 @@ public interface PromptFactory {
      * @return Agent Planning Prompt
      */
     PromptFragment agentPlanning();
+
+    /**
+     * 获取 Agent Final Answer Prompt。
+     *
+     * @return Agent Final Answer Prompt
+     */
+    PromptFragment agentFinalAnswer();
+
+    /**
+     * 获取 Agent Reflection Prompt。
+     *
+     * @return Agent Reflection Prompt
+     */
+    PromptFragment agentReflection();
+
+    /**
+     * 获取 Agent Replanning Prompt。
+     *
+     * @return Agent Replanning Prompt
+     */
+    PromptFragment agentReplanning();
+
+    /**
+     * 获取 Agent Runtime Reason Prompt。
+     *
+     * @return Runtime Reason Prompt
+     */
+    PromptFragment agentRuntimeReason();
 }
