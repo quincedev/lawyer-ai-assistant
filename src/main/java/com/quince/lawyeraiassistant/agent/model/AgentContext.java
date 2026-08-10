@@ -1,5 +1,7 @@
 package com.quince.lawyeraiassistant.agent.model;
 
+import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -8,6 +10,7 @@ import lombok.ToString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Agent Pipeline 的统一上下文对象。
@@ -91,6 +94,8 @@ public final class AgentContext {
 
         private final List<RuntimeReasonObservation> runtimeReasonObservations;
 
+        private final SkillContext skillContext;
+
         @Builder(toBuilder = true)
         private AgentContext(
                         String goal,
@@ -100,7 +105,8 @@ public final class AgentContext {
                         AgentStatus status,
                         List<String> executionLogs,
                         String finalAnswer,
-                        List<RuntimeReasonObservation> runtimeReasonObservations) {
+                        List<RuntimeReasonObservation> runtimeReasonObservations,
+                        SkillContext skillContext) {
 
                 this.goal = normalizeGoal(
                                 goal);
@@ -124,6 +130,8 @@ public final class AgentContext {
                 this.finalAnswer = normalizeFinalAnswer(finalAnswer);
 
                 this.runtimeReasonObservations = normalizeRuntimeReasonObservations(runtimeReasonObservations);
+
+                this.skillContext = skillContext;
         }
 
         /**
@@ -206,6 +214,31 @@ public final class AgentContext {
          */
         public boolean hasExecutionLogs() {
                 return !executionLogs.isEmpty();
+        }
+
+        public Optional<SkillContext> getSkillContext() {
+                return Optional.ofNullable(skillContext);
+        }
+
+        public boolean hasSkill() {
+                return skillContext != null;
+        }
+
+        public Optional<AgentSkill> getSelectedSkill() {
+                return getSkillContext()
+                                .map(SkillContext::getSkill);
+        }
+
+        public AgentContext withSkillContext(
+                        SkillContext skillContext) {
+
+                Objects.requireNonNull(
+                                skillContext,
+                                "SkillContext must not be null");
+
+                return toBuilder()
+                                .skillContext(skillContext)
+                                .build();
         }
 
         /**

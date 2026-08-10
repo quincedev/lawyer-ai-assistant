@@ -1,9 +1,12 @@
 package com.quince.lawyeraiassistant.agent.model;
 
+import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -15,6 +18,75 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AgentContextTest {
+
+        @Test
+        void initialContextShouldNotHaveSkill() {
+                AgentContext context = AgentContext.from(
+                                "研究劳动合同问题");
+
+                assertFalse(context.hasSkill());
+                assertTrue(context.getSkillContext().isEmpty());
+                assertTrue(context.getSelectedSkill().isEmpty());
+        }
+
+        @Test
+        void shouldAttachSkillContextWithoutMutatingOriginalContext() {
+                AgentContext original = AgentContext.from(
+                                "研究劳动合同问题");
+                SkillContext skillContext = SkillContext.of(
+                                createSkill());
+
+                AgentContext updated = original.withSkillContext(
+                                skillContext);
+
+                assertFalse(original.hasSkill());
+                assertTrue(updated.hasSkill());
+                assertSame(skillContext, updated.getSkillContext().orElseThrow());
+                assertEquals(
+                                "legal-research",
+                                updated.getSelectedSkill().orElseThrow().getId());
+        }
+
+        @Test
+        void skillContextShouldSurviveContextEvolution() {
+                AgentContext context = AgentContext.from(
+                                                "研究劳动合同问题")
+                                .withSkillContext(
+                                                SkillContext.of(createSkill()));
+
+                AgentContext updated = context
+                                .withReasonResult(ReasonResult.from("需要先检索法律依据"))
+                                .appendExecutionLog("Reason completed");
+
+                assertTrue(updated.hasSkill());
+                assertEquals(
+                                "legal-research",
+                                updated.getSelectedSkill().orElseThrow().getId());
+        }
+
+        @Test
+        void shouldRejectNullSkillContext() {
+                AgentContext context = AgentContext.from(
+                                "研究劳动合同问题");
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> context.withSkillContext(null));
+
+                assertEquals(
+                                "SkillContext must not be null",
+                                exception.getMessage());
+        }
+
+        private AgentSkill createSkill() {
+                return AgentSkill.of(
+                                "legal-research",
+                                "Legal Research",
+                                "用于研究具体法律问题",
+                                "执行法律研究",
+                                List.of("searchLegalKnowledge"),
+                                Set.of("legal", "research"));
+        }
 
         @Test
         void shouldCreateInitialContextFromGoal() {

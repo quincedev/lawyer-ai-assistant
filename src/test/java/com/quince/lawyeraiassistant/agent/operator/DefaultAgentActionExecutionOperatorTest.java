@@ -8,6 +8,9 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentRuntimeReasonService;
+import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.ToolActionExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,269 +24,357 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Set;
+
 class DefaultAgentActionExecutionOperatorTest {
 
-    private ToolActionExecutor toolActionExecutor;
+        private ToolActionExecutor toolActionExecutor;
 
-    private AgentRuntimeReasonService runtimeReasonService;
+        private AgentRuntimeReasonService runtimeReasonService;
 
-    private AgentFinalAnswerService finalAnswerService;
+        private AgentFinalAnswerService finalAnswerService;
 
-    private DefaultAgentActionExecutionOperator operator;
+        private DefaultAgentActionExecutionOperator operator;
 
-    @BeforeEach
-    void setUp() {
+        private SkillToolScope skillToolScope;
 
-        toolActionExecutor = mock(
-                ToolActionExecutor.class);
+        @BeforeEach
+        void setUp() {
 
-        runtimeReasonService = mock(
-                AgentRuntimeReasonService.class);
+                toolActionExecutor = mock(
+                                ToolActionExecutor.class);
 
-        finalAnswerService = mock(
-                AgentFinalAnswerService.class);
+                runtimeReasonService = mock(
+                                AgentRuntimeReasonService.class);
 
-        operator = new DefaultAgentActionExecutionOperator(
-                toolActionExecutor,
-                runtimeReasonService,
-                finalAnswerService);
-    }
+                finalAnswerService = mock(
+                                AgentFinalAnswerService.class);
 
-    @Test
-    void shouldExecuteToolAction() {
+                skillToolScope = new SkillToolScope();
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                operator = new DefaultAgentActionExecutionOperator(
+                                toolActionExecutor,
+                                runtimeReasonService,
+                                finalAnswerService,
+                                skillToolScope);
+        }
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "查询法律依据");
+        @Test
+        void shouldExecuteReasonAction() {
 
-        ToolAction toolAction = ToolAction.of(
-                "task-1",
-                "searchLegalKnowledge");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        AgentAction action = AgentAction.tool(
-                toolAction);
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "分析竞业限制条款");
 
-        ToolObservation observation = ToolObservation.success(
-                "task-1",
-                "searchLegalKnowledge",
-                "劳动合同法相关规定");
+                AgentAction action = AgentAction.reason(
+                                "task-1");
 
-        when(
-                toolActionExecutor.execute(
-                        toolAction))
-                .thenReturn(
-                        observation);
+                when(
+                                runtimeReasonService.reason(
+                                                context,
+                                                task))
+                                .thenReturn(
+                                                "该竞业限制条款需要结合补偿约定判断");
 
-        AgentActionExecutionResult result = operator.execute(
-                context,
-                task,
-                action);
+                AgentActionExecutionResult result = operator.execute(
+                                context,
+                                task,
+                                action);
 
-        assertTrue(
-                result.isTool());
+                assertTrue(
+                                result.isReason());
 
-        assertSame(
-                observation,
-                result.getObservation());
+                assertEquals(
+                                "该竞业限制条款需要结合补偿约定判断",
+                                result.getContent());
 
-        verify(
-                toolActionExecutor)
-                .execute(
-                        toolAction);
+                verify(
+                                runtimeReasonService)
+                                .reason(
+                                                context,
+                                                task);
 
-        verify(
-                runtimeReasonService,
-                never())
-                .reason(
-                        context,
-                        task);
+                verify(
+                                toolActionExecutor,
+                                never())
+                                .execute(
+                                                org.mockito.ArgumentMatchers.any());
 
-        verify(
-                finalAnswerService,
-                never())
-                .generate(
-                        context);
-    }
+                verify(
+                                finalAnswerService,
+                                never())
+                                .generate(
+                                                context);
+        }
 
-    @Test
-    void shouldExecuteReasonAction() {
+        @Test
+        void shouldExecuteFinalAnswerAction() {
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "分析竞业限制条款");
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "形成最终意见");
 
-        AgentAction action = AgentAction.reason(
-                "task-1");
+                AgentAction action = AgentAction.finalAnswer(
+                                "task-1");
 
-        when(
-                runtimeReasonService.reason(
-                        context,
-                        task))
-                .thenReturn(
-                        "该竞业限制条款需要结合补偿约定判断");
+                when(
+                                finalAnswerService.generate(
+                                                context))
+                                .thenReturn(
+                                                "该劳动合同存在以下法律风险……");
 
-        AgentActionExecutionResult result = operator.execute(
-                context,
-                task,
-                action);
+                AgentActionExecutionResult result = operator.execute(
+                                context,
+                                task,
+                                action);
 
-        assertTrue(
-                result.isReason());
+                assertTrue(
+                                result.isFinalAnswer());
 
-        assertEquals(
-                "该竞业限制条款需要结合补偿约定判断",
-                result.getContent());
+                assertEquals(
+                                "该劳动合同存在以下法律风险……",
+                                result.getContent());
 
-        verify(
-                runtimeReasonService)
-                .reason(
-                        context,
-                        task);
+                verify(
+                                finalAnswerService)
+                                .generate(
+                                                context);
 
-        verify(
-                toolActionExecutor,
-                never())
-                .execute(
-                        org.mockito.ArgumentMatchers.any());
+                verify(
+                                toolActionExecutor,
+                                never())
+                                .execute(
+                                                org.mockito.ArgumentMatchers.any());
 
-        verify(
-                finalAnswerService,
-                never())
-                .generate(
-                        context);
-    }
+                verify(
+                                runtimeReasonService,
+                                never())
+                                .reason(
+                                                context,
+                                                task);
+        }
 
-    @Test
-    void shouldExecuteFinalAnswerAction() {
+        @Test
+        void shouldRejectMismatchedTaskId() {
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "形成最终意见");
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "查询法律依据");
 
-        AgentAction action = AgentAction.finalAnswer(
-                "task-1");
+                AgentAction action = AgentAction.reason(
+                                "task-2");
 
-        when(
-                finalAnswerService.generate(
-                        context))
-                .thenReturn(
-                        "该劳动合同存在以下法律风险……");
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> operator.execute(
+                                                context,
+                                                task,
+                                                action));
 
-        AgentActionExecutionResult result = operator.execute(
-                context,
-                task,
-                action);
+                assertEquals(
+                                "AgentAction taskId must match AgentTask id",
+                                exception.getMessage());
+        }
 
-        assertTrue(
-                result.isFinalAnswer());
+        @Test
+        void shouldRejectNullContext() {
 
-        assertEquals(
-                "该劳动合同存在以下法律风险……",
-                result.getContent());
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "查询法律依据");
 
-        verify(
-                finalAnswerService)
-                .generate(
-                        context);
+                AgentAction action = AgentAction.reason(
+                                "task-1");
 
-        verify(
-                toolActionExecutor,
-                never())
-                .execute(
-                        org.mockito.ArgumentMatchers.any());
+                assertThrows(
+                                NullPointerException.class,
+                                () -> operator.execute(
+                                                null,
+                                                task,
+                                                action));
+        }
 
-        verify(
-                runtimeReasonService,
-                never())
-                .reason(
-                        context,
-                        task);
-    }
+        @Test
+        void shouldRejectNullTask() {
 
-    @Test
-    void shouldRejectMismatchedTaskId() {
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                AgentAction action = AgentAction.reason(
+                                "task-1");
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "查询法律依据");
+                assertThrows(
+                                NullPointerException.class,
+                                () -> operator.execute(
+                                                context,
+                                                null,
+                                                action));
+        }
 
-        AgentAction action = AgentAction.reason(
-                "task-2");
+        @Test
+        void shouldRejectNullAction() {
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> operator.execute(
-                        context,
-                        task,
-                        action));
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        assertEquals(
-                "AgentAction taskId must match AgentTask id",
-                exception.getMessage());
-    }
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "查询法律依据");
 
-    @Test
-    void shouldRejectNullContext() {
+                assertThrows(
+                                NullPointerException.class,
+                                () -> operator.execute(
+                                                context,
+                                                task,
+                                                null));
+        }
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "查询法律依据");
+        @Test
+        void shouldExecuteToolActionWhenAllowedBySkill() {
 
-        AgentAction action = AgentAction.reason(
-                "task-1");
+                AgentSkill skill = AgentSkill.of(
+                                "legal-research",
+                                "Legal Research",
+                                "用于研究具体法律问题",
+                                "执行法律研究",
+                                List.of(
+                                                "searchLegalKnowledge"),
+                                Set.of(
+                                                "legal",
+                                                "research"));
 
-        assertThrows(
-                NullPointerException.class,
-                () -> operator.execute(
-                        null,
-                        task,
-                        action));
-    }
+                AgentContext context = AgentContext.from(
+                                "研究劳动合同法律问题")
+                                .withSkillContext(
+                                                SkillContext.of(
+                                                                skill));
 
-    @Test
-    void shouldRejectNullTask() {
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "查询法律依据");
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                ToolAction toolAction = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge");
 
-        AgentAction action = AgentAction.reason(
-                "task-1");
+                AgentAction action = AgentAction.tool(
+                                toolAction);
 
-        assertThrows(
-                NullPointerException.class,
-                () -> operator.execute(
-                        context,
-                        null,
-                        action));
-    }
+                ToolObservation observation = ToolObservation.success(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "劳动合同法相关规定");
 
-    @Test
-    void shouldRejectNullAction() {
+                when(
+                                toolActionExecutor.execute(
+                                                toolAction))
+                                .thenReturn(
+                                                observation);
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                AgentActionExecutionResult result = operator.execute(
+                                context,
+                                task,
+                                action);
 
-        AgentTask task = AgentTask.pending(
-                "task-1",
-                "查询法律依据");
+                assertTrue(
+                                result.isTool());
 
-        assertThrows(
-                NullPointerException.class,
-                () -> operator.execute(
-                        context,
-                        task,
-                        null));
-    }
+                assertSame(
+                                observation,
+                                result.getObservation());
+
+                verify(
+                                toolActionExecutor)
+                                .execute(
+                                                toolAction);
+        }
+
+        @Test
+        void shouldRejectToolActionWhenNotAllowedBySkill() {
+
+                AgentSkill skill = AgentSkill.of(
+                                "legal-summary",
+                                "Legal Summary",
+                                "用于总结已有法律材料",
+                                "根据已有上下文进行总结",
+                                List.of(),
+                                Set.of(
+                                                "legal",
+                                                "summary"));
+
+                AgentContext context = AgentContext.from(
+                                "总结已有法律材料")
+                                .withSkillContext(
+                                                SkillContext.of(
+                                                                skill));
+
+                AgentTask task = AgentTask.pending(
+                                "task-1",
+                                "总结已有法律材料");
+
+                ToolAction toolAction = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge");
+
+                AgentAction action = AgentAction.tool(
+                                toolAction);
+
+                AgentActionExecutionResult result = operator.execute(
+                                context,
+                                task,
+                                action);
+
+                assertTrue(
+                                result.isTool());
+
+                ToolObservation observation = result.getObservation();
+
+                assertTrue(
+                                observation.isFailure());
+
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
+
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
+
+                assertEquals(
+                                "Tool is not allowed by current Skill: "
+                                                + "searchLegalKnowledge",
+                                observation.getErrorMessage());
+
+                verify(
+                                toolActionExecutor,
+                                never())
+                                .execute(
+                                                org.mockito.ArgumentMatchers.any());
+        }
+
+        @Test
+        void shouldRejectNullSkillToolScope() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new DefaultAgentActionExecutionOperator(
+                                                toolActionExecutor,
+                                                runtimeReasonService,
+                                                finalAnswerService,
+                                                null));
+
+                assertEquals(
+                                "SkillToolScope must not be null",
+                                exception.getMessage());
+        }
 }

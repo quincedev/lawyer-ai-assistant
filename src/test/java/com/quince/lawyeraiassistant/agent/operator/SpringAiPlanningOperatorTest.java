@@ -7,11 +7,17 @@ import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.agent.prompt.model.PlanningPromptContext;
 import com.quince.lawyeraiassistant.agent.service.AgentPlanningService;
+import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
+import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,276 +25,453 @@ import static org.mockito.Mockito.*;
 
 class SpringAiPlanningOperatorTest {
 
-    private AgentPlanningService planningService;
+        private AgentPlanningService planningService;
 
-    private SpringAiPlanningOperator operator;
+        private SpringAiPlanningOperator operator;
 
-    @BeforeEach
-    void setUp() {
+        private SkillToolScope skillToolScope;
 
-        planningService = mock(AgentPlanningService.class);
+        private AgentToolRegistry toolRegistry;
 
-        operator = new SpringAiPlanningOperator(
-                planningService);
-    }
+        @BeforeEach
+        void setUp() {
 
-    @Test
-    void shouldGenerateAgentPlanAndUpdateContext() {
+                planningService = mock(
+                                AgentPlanningService.class);
 
-        AgentContext originalContext = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        ReasonResult.from(
-                                "用户希望分析劳动合同。"));
+                skillToolScope = mock(
+                                SkillToolScope.class);
 
-        AgentPlan plan = AgentPlan.from(
-                List.of(
-                        AgentTask.pending(
-                                "task-1",
-                                "读取劳动合同")));
+                toolRegistry = mock(
+                                AgentToolRegistry.class);
 
-        when(
-                planningService.plan(
-                        any(PlanningPromptContext.class)))
-                .thenReturn(plan);
+                when(
+                                toolRegistry.names())
+                                .thenReturn(
+                                                List.of());
 
-        AgentContext result = operator.execute(
-                originalContext);
+                when(
+                                skillToolScope.filterAllowed(
+                                                any(),
+                                                any()))
+                                .thenReturn(
+                                                List.of());
 
-        assertNotSame(
-                originalContext,
-                result);
+                operator = new SpringAiPlanningOperator(
+                                planningService,
+                                skillToolScope,
+                                toolRegistry);
+        }
 
-        assertTrue(
-                result.hasAgentPlan());
+        @Test
+        void shouldGenerateAgentPlanAndUpdateContext() {
 
-        assertSame(
-                plan,
-                result.getAgentPlan());
+                AgentContext originalContext = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "用户希望分析劳动合同。"));
 
-        assertEquals(
-                AgentStatus.RUNNING,
-                result.getStatus());
+                AgentPlan plan = AgentPlan.from(
+                                List.of(
+                                                AgentTask.pending(
+                                                                "task-1",
+                                                                "读取劳动合同")));
 
-        assertEquals(
-                List.of(
-                        "Planning completed"),
-                result.getExecutionLogs());
+                when(
+                                planningService.plan(
+                                                any(PlanningPromptContext.class)))
+                                .thenReturn(plan);
 
-        /*
-         * 原 Context 不变
-         */
-        assertFalse(
-                originalContext.hasAgentPlan());
+                AgentContext result = operator.execute(
+                                originalContext);
 
-        assertTrue(
-                originalContext
-                        .getExecutionLogs()
-                        .isEmpty());
-    }
+                assertNotSame(
+                                originalContext,
+                                result);
 
-    @Test
-    void shouldPassGoalAndReasonResultToPlanningService() {
+                assertTrue(
+                                result.hasAgentPlan());
 
-        ReasonResult reason = ReasonResult.from(
-                "分析劳动合同。");
+                assertSame(
+                                plan,
+                                result.getAgentPlan());
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        reason);
+                assertEquals(
+                                AgentStatus.RUNNING,
+                                result.getStatus());
 
-        when(
-                planningService.plan(
-                        any()))
-                .thenReturn(
-                        AgentPlan.empty());
+                assertEquals(
+                                List.of(
+                                                "Planning completed"),
+                                result.getExecutionLogs());
 
-        operator.execute(
-                context);
+                /*
+                 * 原 Context 不变
+                 */
+                assertFalse(
+                                originalContext.hasAgentPlan());
 
-        ArgumentCaptor<PlanningPromptContext> captor = ArgumentCaptor.forClass(
-                PlanningPromptContext.class);
+                assertTrue(
+                                originalContext
+                                                .getExecutionLogs()
+                                                .isEmpty());
+        }
 
-        verify(
-                planningService).plan(
-                        captor.capture());
+        @Test
+        void shouldPassGoalAndReasonResultToPlanningService() {
 
-        PlanningPromptContext promptContext = captor.getValue();
+                ReasonResult reason = ReasonResult.from(
+                                "分析劳动合同。");
 
-        assertEquals(
-                "分析劳动合同",
-                promptContext.getGoal());
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                reason);
 
-        assertSame(
-                reason,
-                promptContext.getReasonResult());
-    }
+                when(
+                                planningService.plan(
+                                                any()))
+                                .thenReturn(
+                                                AgentPlan.empty());
 
-    @Test
-    void shouldPreserveReasonResultAfterPlanning() {
+                operator.execute(
+                                context);
 
-        ReasonResult reason = ReasonResult.from(
-                "分析劳动合同。");
+                ArgumentCaptor<PlanningPromptContext> captor = ArgumentCaptor.forClass(
+                                PlanningPromptContext.class);
 
-        AgentPlan plan = AgentPlan.from(
-                List.of(
-                        AgentTask.pending(
-                                "task-1",
-                                "读取劳动合同")));
+                verify(
+                                planningService).plan(
+                                                captor.capture());
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        reason);
+                PlanningPromptContext promptContext = captor.getValue();
 
-        when(
-                planningService.plan(
-                        any()))
-                .thenReturn(
-                        plan);
+                assertEquals(
+                                "分析劳动合同",
+                                promptContext.getGoal());
 
-        AgentContext result = operator.execute(
-                context);
+                assertSame(
+                                reason,
+                                promptContext.getReasonResult());
+        }
 
-        assertSame(
-                reason,
-                result.getReasonResult());
+        @Test
+        void shouldPreserveReasonResultAfterPlanning() {
 
-        assertSame(
-                plan,
-                result.getAgentPlan());
-    }
+                ReasonResult reason = ReasonResult.from(
+                                "分析劳动合同。");
 
-    @Test
-    void shouldAppendPlanningCompletedLog() {
+                AgentPlan plan = AgentPlan.from(
+                                List.of(
+                                                AgentTask.pending(
+                                                                "task-1",
+                                                                "读取劳动合同")));
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        ReasonResult.from(
-                                "分析劳动合同。"))
-                .appendExecutionLog(
-                        "Reason completed");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                reason);
 
-        when(
-                planningService.plan(
-                        any()))
-                .thenReturn(
-                        AgentPlan.empty());
+                when(
+                                planningService.plan(
+                                                any()))
+                                .thenReturn(
+                                                plan);
 
-        AgentContext result = operator.execute(
-                context);
+                AgentContext result = operator.execute(
+                                context);
 
-        assertEquals(
-                List.of(
-                        "Reason completed",
-                        "Planning completed"),
-                result.getExecutionLogs());
-    }
+                assertSame(
+                                reason,
+                                result.getReasonResult());
 
-    @Test
-    void shouldRejectNullContext() {
+                assertSame(
+                                plan,
+                                result.getAgentPlan());
+        }
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> operator.execute(null));
+        @Test
+        void shouldAppendPlanningCompletedLog() {
 
-        assertEquals(
-                "AgentContext must not be null",
-                exception.getMessage());
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "分析劳动合同。"))
+                                .appendExecutionLog(
+                                                "Reason completed");
 
-        verify(
-                planningService,
-                never()).plan(
-                        any());
-    }
+                when(
+                                planningService.plan(
+                                                any()))
+                                .thenReturn(
+                                                AgentPlan.empty());
 
-    @Test
-    void shouldRejectContextWithoutReasonResult() {
+                AgentContext result = operator.execute(
+                                context);
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                assertEquals(
+                                List.of(
+                                                "Reason completed",
+                                                "Planning completed"),
+                                result.getExecutionLogs());
+        }
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> operator.execute(
-                        context));
+        @Test
+        void shouldRejectNullContext() {
 
-        assertEquals(
-                "ReasonResult must exist before planning",
-                exception.getMessage());
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> operator.execute(null));
 
-        verify(
-                planningService,
-                never()).plan(
-                        any());
-    }
+                assertEquals(
+                                "AgentContext must not be null",
+                                exception.getMessage());
 
-    @Test
-    void shouldRejectNullPlanReturnedByService() {
+                verify(
+                                planningService,
+                                never()).plan(
+                                                any());
+        }
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        ReasonResult.from(
-                                "分析劳动合同。"));
+        @Test
+        void shouldRejectContextWithoutReasonResult() {
 
-        when(
-                planningService.plan(
-                        any()))
-                .thenReturn(
-                        null);
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> operator.execute(
-                        context));
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> operator.execute(
+                                                context));
 
-        assertEquals(
-                "AgentPlanningService must not return null",
-                exception.getMessage());
-    }
+                assertEquals(
+                                "ReasonResult must exist before planning",
+                                exception.getMessage());
 
-    @Test
-    void shouldPropagatePlanningException() {
+                verify(
+                                planningService,
+                                never()).plan(
+                                                any());
+        }
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .withReasonResult(
-                        ReasonResult.from(
-                                "分析劳动合同。"));
+        @Test
+        void shouldRejectNullPlanReturnedByService() {
 
-        IllegalStateException expected = new IllegalStateException(
-                "Planning failed");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "分析劳动合同。"));
 
-        when(
-                planningService.plan(
-                        any()))
-                .thenThrow(
-                        expected);
+                when(
+                                planningService.plan(
+                                                any()))
+                                .thenReturn(
+                                                null);
 
-        IllegalStateException actual = assertThrows(
-                IllegalStateException.class,
-                () -> operator.execute(
-                        context));
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> operator.execute(
+                                                context));
 
-        assertSame(
-                expected,
-                actual);
-    }
+                assertEquals(
+                                "AgentPlanningService must not return null",
+                                exception.getMessage());
+        }
 
-    @Test
-    void shouldRejectNullPlanningService() {
+        @Test
+        void shouldPropagatePlanningException() {
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> new SpringAiPlanningOperator(
-                        null));
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "分析劳动合同。"));
 
-        assertEquals(
-                "agentPlanningService must not be null",
-                exception.getMessage());
-    }
+                IllegalStateException expected = new IllegalStateException(
+                                "Planning failed");
 
+                when(
+                                planningService.plan(
+                                                any()))
+                                .thenThrow(
+                                                expected);
+
+                IllegalStateException actual = assertThrows(
+                                IllegalStateException.class,
+                                () -> operator.execute(
+                                                context));
+
+                assertSame(
+                                expected,
+                                actual);
+        }
+
+        @Test
+        void shouldRejectNullPlanningService() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new SpringAiPlanningOperator(
+                                                null,
+                                                skillToolScope,
+                                                toolRegistry));
+
+                assertEquals(
+                                "agentPlanningService must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldPassSkillInstructionsAndAvailableToolsToPlanningService() {
+
+                AgentSkill skill = AgentSkill.of(
+                                "legal-research",
+                                "Legal Research",
+                                "用于研究具体法律问题",
+                                "优先检索法律知识库，并基于检索结果完成法律分析",
+                                List.of(
+                                                "searchLegalKnowledge"),
+                                Set.of(
+                                                "legal",
+                                                "research"));
+
+                SkillContext skillContext = SkillContext.of(
+                                skill);
+
+                AgentContext context = AgentContext.from(
+                                "分析违法解除劳动合同")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "需要分析违法解除的法律依据"))
+                                .withSkillContext(
+                                                skillContext);
+
+                when(
+                                toolRegistry.names())
+                                .thenReturn(
+                                                List.of(
+                                                                "searchLegalKnowledge"));
+
+                when(
+                                skillToolScope.filterAllowed(
+                                                context.getSkillContext(),
+                                                List.of(
+                                                                "searchLegalKnowledge")))
+                                .thenReturn(
+                                                List.of(
+                                                                "searchLegalKnowledge"));
+
+                when(
+                                planningService.plan(
+                                                any(
+                                                                PlanningPromptContext.class)))
+                                .thenReturn(
+                                                AgentPlan.empty());
+
+                operator.execute(
+                                context);
+
+                ArgumentCaptor<PlanningPromptContext> captor = ArgumentCaptor.forClass(
+                                PlanningPromptContext.class);
+
+                verify(
+                                planningService)
+                                .plan(
+                                                captor.capture());
+
+                PlanningPromptContext promptContext = captor.getValue();
+
+                assertEquals(
+                                "优先检索法律知识库，并基于检索结果完成法律分析",
+                                promptContext.getSkillInstructions());
+
+                assertEquals(
+                                "searchLegalKnowledge",
+                                promptContext.getAvailableTools());
+        }
+
+        @Test
+        void shouldUseNoneSkillAndNoToolsWhenNoSkillSelected() {
+
+                AgentContext context = AgentContext.from(
+                                "分析普通问题")
+                                .withReasonResult(
+                                                ReasonResult.from(
+                                                                "这是一个普通问题"));
+
+                when(
+                                toolRegistry.names())
+                                .thenReturn(
+                                                List.of(
+                                                                "searchLegalKnowledge"));
+
+                when(
+                                skillToolScope.filterAllowed(
+                                                context.getSkillContext(),
+                                                List.of(
+                                                                "searchLegalKnowledge")))
+                                .thenReturn(
+                                                List.of());
+
+                when(
+                                planningService.plan(
+                                                any(
+                                                                PlanningPromptContext.class)))
+                                .thenReturn(
+                                                AgentPlan.empty());
+
+                operator.execute(
+                                context);
+
+                ArgumentCaptor<PlanningPromptContext> captor = ArgumentCaptor.forClass(
+                                PlanningPromptContext.class);
+
+                verify(
+                                planningService)
+                                .plan(
+                                                captor.capture());
+
+                PlanningPromptContext promptContext = captor.getValue();
+
+                assertEquals(
+                                "无",
+                                promptContext.getSkillInstructions());
+
+                assertEquals(
+                                "无",
+                                promptContext.getAvailableTools());
+        }
+
+        @Test
+        void shouldRejectNullSkillToolScope() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new SpringAiPlanningOperator(
+                                                planningService,
+                                                null,
+                                                toolRegistry));
+
+                assertEquals(
+                                "skillToolScope must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullToolRegistry() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new SpringAiPlanningOperator(
+                                                planningService,
+                                                skillToolScope,
+                                                null));
+
+                assertEquals(
+                                "toolRegistry must not be null",
+                                exception.getMessage());
+        }
 }

@@ -2,10 +2,11 @@ package com.quince.lawyeraiassistant.agent.service;
 
 import com.quince.lawyeraiassistant.agent.model.AgentPlan;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
+import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.agent.parser.AgentPlanParser;
 import com.quince.lawyeraiassistant.agent.prompt.model.PlanningPromptContext;
-import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.prompt.builder.PromptBuilder;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -66,7 +67,9 @@ class DefaultAgentPlanningServiceTest {
                 PlanningPromptContext context = PlanningPromptContext.from(
                                 "分析劳动合同并生成律师意见书",
                                 ReasonResult.from(
-                                                "用户希望分析劳动合同并生成律师意见书。"));
+                                                "用户希望分析劳动合同并生成律师意见书。"),
+                                "优先检索法律知识库",
+                                "searchLegalKnowledge");
 
                 Prompt prompt = mock(
                                 Prompt.class);
@@ -123,6 +126,109 @@ class DefaultAgentPlanningServiceTest {
                 assertSame(
                                 expectedPlan,
                                 result);
+
+                verify(
+                                promptBuilder)
+                                .buildPlanning(
+                                                context);
+
+                verify(
+                                chatClient)
+                                .prompt(
+                                                prompt);
+
+                verify(
+                                requestSpec)
+                                .call();
+
+                verify(
+                                responseSpec)
+                                .content();
+
+                verify(
+                                agentPlanParser)
+                                .parse(
+                                                content);
+        }
+
+        @Test
+        void shouldSupportPlanningWithoutSkillAndTools() {
+
+                PlanningPromptContext context = PlanningPromptContext.from(
+                                "分析人工智能 Agent 和传统 Workflow 的主要区别",
+                                ReasonResult.from(
+                                                "用户希望比较两种技术模式。"),
+                                "无",
+                                "无");
+
+                Prompt prompt = mock(
+                                Prompt.class);
+
+                String content = """
+                                task-1|梳理人工智能Agent的核心特征
+                                task-2|梳理传统Workflow的核心特征
+                                task-3|比较两者的主要区别
+                                """;
+
+                AgentPlan expectedPlan = AgentPlan.from(
+                                List.of(
+                                                AgentTask.pending(
+                                                                "task-1",
+                                                                "梳理人工智能Agent的核心特征"),
+                                                AgentTask.pending(
+                                                                "task-2",
+                                                                "梳理传统Workflow的核心特征"),
+                                                AgentTask.pending(
+                                                                "task-3",
+                                                                "比较两者的主要区别")));
+
+                when(
+                                promptBuilder.buildPlanning(
+                                                context))
+                                .thenReturn(
+                                                prompt);
+
+                when(
+                                chatClient.prompt(
+                                                prompt))
+                                .thenReturn(
+                                                requestSpec);
+
+                when(
+                                requestSpec.call())
+                                .thenReturn(
+                                                responseSpec);
+
+                when(
+                                responseSpec.content())
+                                .thenReturn(
+                                                content);
+
+                when(
+                                agentPlanParser.parse(
+                                                content))
+                                .thenReturn(
+                                                expectedPlan);
+
+                AgentPlan result = planningService.plan(
+                                context);
+
+                assertSame(
+                                expectedPlan,
+                                result);
+
+                assertEquals(
+                                "无",
+                                context.getSkillInstructions());
+
+                assertEquals(
+                                "无",
+                                context.getAvailableTools());
+
+                verify(
+                                promptBuilder)
+                                .buildPlanning(
+                                                context);
 
                 verify(
                                 agentPlanParser)
@@ -228,6 +334,8 @@ class DefaultAgentPlanningServiceTest {
                 return PlanningPromptContext.from(
                                 "分析劳动合同",
                                 ReasonResult.from(
-                                                "用户希望分析劳动合同。"));
+                                                "用户希望分析劳动合同。"),
+                                "无",
+                                "无");
         }
 }

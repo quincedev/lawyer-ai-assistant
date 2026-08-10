@@ -16,6 +16,9 @@ import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.agent.skill.selector.AgentSkillSelector;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +44,8 @@ public class DefaultAgentRuntime
 
         private final AgentFinalAnswerService finalAnswerService;
 
+        private final AgentSkillSelector skillSelector;
+
         private final int maxSteps;
 
         private final int maxRetriesPerTask;
@@ -49,6 +54,7 @@ public class DefaultAgentRuntime
 
         public DefaultAgentRuntime(
                         AgentPipeline agentPipeline,
+                        AgentSkillSelector skillSelector,
                         AgentActionSelector actionSelector,
                         AgentActionExecutionOperator actionExecutionOperator,
                         AgentReflectionService reflectionService,
@@ -61,6 +67,10 @@ public class DefaultAgentRuntime
                 this.agentPipeline = Objects.requireNonNull(
                                 agentPipeline,
                                 "agentPipeline must not be null");
+
+                this.skillSelector = Objects.requireNonNull(
+                                skillSelector,
+                                "skillSelector must not be null");
 
                 this.actionSelector = Objects.requireNonNull(
                                 actionSelector,
@@ -112,6 +122,9 @@ public class DefaultAgentRuntime
                                 context,
                                 "AgentContext must not be null");
 
+                AgentContext skillAwareContext = attachSelectedSkill(
+                                context);
+
                 /*
                  * Initialization:
                  *
@@ -120,7 +133,7 @@ public class DefaultAgentRuntime
                  * Planning
                  */
                 AgentContext current = agentPipeline.execute(
-                                context);
+                                skillAwareContext);
 
                 int executedSteps = 0;
 
@@ -326,6 +339,30 @@ public class DefaultAgentRuntime
                                 current,
                                 "Maximum execution steps reached: "
                                                 + maxSteps);
+        }
+
+        private AgentContext attachSelectedSkill(
+                        AgentContext context) {
+
+                if (context.hasSkill()) {
+
+                        return context;
+                }
+
+                return skillSelector
+                                .select(
+                                                context.getGoal())
+                                .map(
+                                                skill -> context
+                                                                .withSkillContext(
+                                                                                SkillContext.of(
+                                                                                                skill))
+                                                                .appendExecutionLog(
+                                                                                "Skill selected: "
+                                                                                                + skill.getId()))
+                                .orElseGet(
+                                                () -> context.appendExecutionLog(
+                                                                "No skill selected"));
         }
 
         /*

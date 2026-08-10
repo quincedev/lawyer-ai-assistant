@@ -21,6 +21,27 @@
 【执行过程中获得的信息】
 {observations}
 
+关于执行结果的说明：
+
+执行结果可能来自不同类型的 Action：
+
+1. Type: REASON
+   表示 Agent 已经通过推理完成了当前 Task 的阶段性分析结果。
+   REASON Result 本身就是当前 Task 的有效执行结果，
+   Reflection 必须评估该 Result 是否足以完成当前 Task。
+
+2. Tool + Status: SUCCESS
+   表示 Tool 已成功执行，其 Result 是当前 Task 可使用的外部执行结果。
+
+3. Tool + Status: FAILED
+   表示 Tool 执行失败，其 Error 不能视为已经获得了任务所需的信息。
+
+不要因为当前 Task 没有 Tool Observation，
+就认为当前 Task 没有执行结果。
+
+如果存在与当前 Task 对应的 REASON Result，
+应直接评估该 Result 的内容是否已经满足当前 Task。
+
 你必须从以下四种 Decision 中选择一个：
 
 CONTINUE
@@ -48,26 +69,58 @@ FINISH
 
 1. Tool 调用成功不等于 Task 一定成功。
 
-2. 判断重点是：
-   当前已有结果是否真正满足当前 Task。
+2. REASON Result 和成功的 Tool Result
+   都属于可以用于判断 Task 是否完成的有效执行结果。
 
-3. 如果结果与当前 Task 相关且已经足够，
+3. 判断重点是：
+   当前 Task 对应的已有执行结果是否真正满足当前 Task。
+
+4. 如果当前 Task 已存在内容充分、
+   与任务直接相关的 REASON Result，
+   即使没有 Tool Observation，
+   也可以选择 CONTINUE。
+
+5. 如果当前 Task 明确需要外部事实、
+   专业资料或 Tool 执行结果，
+   而当前只有无法支撑任务的 REASON Result，
+   才应考虑 RETRY。
+
+6. 如果当前 Task 属于概念解释、技术分析、
+   一般知识比较、归纳、总结或逻辑推理，
+
+   并且 Task 本身没有明确要求外部检索、
+   Tool Result、权威来源或事实验证，
+
+   则不得仅因为 REASON Result 没有外部引用、
+   权威资料或 Tool Observation 而选择 RETRY。
+
+   应直接判断 REASON Result 本身
+   是否已经充分回答当前 Task。
+
+7. Reflection 应评估“当前 Task 是否完成”，
+   而不是评估“整个 Plan 是否完成”。
+
+   如果当前 Task 已被充分完成，
+   即使后续还有其他 Task，
+   也应该选择 CONTINUE。
+
+8. 如果结果与当前 Task 相关且已经足够，
    选择 CONTINUE。
 
-4. 如果 Task 本身正确，只是当前结果不足，
+9. 如果 Task 本身正确，只是当前结果不足，
    选择 RETRY。
 
-5. 如果问题已经不是当前 Action，
-   而是原 Plan 本身需要修改，
-   选择 REPLAN。
+10. 如果问题已经不是当前 Action，
+    而是原 Plan 本身需要修改，
+    选择 REPLAN。
 
-6. 只有已经足以完成整个用户目标时，
-   才允许选择 FINISH。
+11. 只有已经足以完成整个用户目标时，
+    才允许选择 FINISH。
 
-7. 不要因为存在剩余 Task 就机械地选择 CONTINUE。
+12. 不要因为存在剩余 Task 就机械地选择 CONTINUE。
 
-8. 不要输出模型内部思维过程。
+13. 不要因为缺少 Tool Observation 就机械地选择 RETRY。
 
-9. summary 应简洁说明做出该 Decision 的原因。
+14. 不要输出模型内部思维过程。
 
-请返回结构化结果。
+15. summary 应简洁说明做出该 Decision 的原因。

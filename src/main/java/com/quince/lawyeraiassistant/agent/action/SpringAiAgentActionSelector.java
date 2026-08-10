@@ -6,12 +6,15 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -27,10 +30,13 @@ public class SpringAiAgentActionSelector
 
         private final AgentToolRegistry toolRegistry;
 
+        private final SkillToolScope skillToolScope;
+
         public SpringAiAgentActionSelector(
                         ChatClient.Builder chatClientBuilder,
                         AgentActionDecisionMapper decisionMapper,
                         AgentToolRegistry toolRegistry,
+                        SkillToolScope skillToolScope,
                         @Value("classpath:/prompts/agent/action-selection.st") Resource actionSelectionPrompt) {
 
                 this.chatClient = Objects.requireNonNull(
@@ -45,6 +51,10 @@ public class SpringAiAgentActionSelector
                 this.toolRegistry = Objects.requireNonNull(
                                 toolRegistry,
                                 "toolRegistry must not be null");
+
+                this.skillToolScope = Objects.requireNonNull(
+                                skillToolScope,
+                                "skillToolScope must not be null");
 
                 this.actionSelectionPrompt = Objects.requireNonNull(
                                 actionSelectionPrompt,
@@ -64,7 +74,8 @@ public class SpringAiAgentActionSelector
                                 task,
                                 "AgentTask must not be null");
 
-                AgentActionDecision decision = chatClient.prompt()
+                AgentActionDecision decision = chatClient
+                                .prompt()
                                 .user(
                                                 userSpec -> userSpec
                                                                 .text(
@@ -88,7 +99,16 @@ public class SpringAiAgentActionSelector
                                                                                                 context))
                                                                 .param(
                                                                                 "availableTools",
-                                                                                resolveAvailableTools()))
+                                                                                resolveAvailableTools(
+                                                                                                context))
+                                                                .param(
+                                                                                "skillName",
+                                                                                resolveSkillName(
+                                                                                                context))
+                                                                .param(
+                                                                                "skillInstructions",
+                                                                                resolveSkillInstructions(
+                                                                                                context)))
                                 .call()
                                 .entity(
                                                 AgentActionDecision.class);
@@ -105,7 +125,8 @@ public class SpringAiAgentActionSelector
                         return "无";
                 }
 
-                return context.getReasonResult()
+                return context
+                                .getReasonResult()
                                 .getReasonSummary();
         }
 
@@ -138,6 +159,22 @@ public class SpringAiAgentActionSelector
                                 : combined;
         }
 
+        private String resolveAvailableTools(
+                        AgentContext context) {
+
+                List<String> effectiveToolNames = skillToolScope.filterAllowed(
+                                context.getSkillContext(),
+                                toolRegistry.names());
+
+                if (effectiveToolNames.isEmpty()) {
+                        return "无";
+                }
+
+                return String.join(
+                                "\n",
+                                effectiveToolNames);
+        }
+
         private String formatToolObservation(
                         ToolObservation observation) {
 
@@ -149,10 +186,11 @@ public class SpringAiAgentActionSelector
                                         Tool: %s
                                         Status: FAILED
                                         Error: %s
-                                        """.formatted(
-                                        observation.getTaskId(),
-                                        observation.getToolName(),
-                                        observation.getErrorMessage())
+                                        """
+                                        .formatted(
+                                                        observation.getTaskId(),
+                                                        observation.getToolName(),
+                                                        observation.getErrorMessage())
                                         .trim();
                 }
 
@@ -163,10 +201,11 @@ public class SpringAiAgentActionSelector
                                 Status: SUCCESS
                                 Result:
                                 %s
-                                """.formatted(
-                                observation.getTaskId(),
-                                observation.getToolName(),
-                                observation.getContent())
+                                """
+                                .formatted(
+                                                observation.getTaskId(),
+                                                observation.getToolName(),
+                                                observation.getContent())
                                 .trim();
         }
 
@@ -178,20 +217,30 @@ public class SpringAiAgentActionSelector
                                 Task: %s
                                 Result:
                                 %s
-                                """.formatted(
-                                observation.getTaskId(),
-                                observation.getContent())
+                                """
+                                .formatted(
+                                                observation.getTaskId(),
+                                                observation.getContent())
                                 .trim();
         }
 
-        private String resolveAvailableTools() {
+        private String resolveSkillName(
+                        AgentContext context) {
 
-                if (toolRegistry.size() == 0) {
-                        return "无";
-                }
+                return context.getSkillContext()
+                                .map(
+                                                SkillContext::getSkillName)
+                                .orElse(
+                                                "无");
+        }
 
-                return String.join(
-                                "\n",
-                                toolRegistry.names());
+        private String resolveSkillInstructions(
+                        AgentContext context) {
+
+                return context.getSkillContext()
+                                .map(
+                                                SkillContext::getInstructions)
+                                .orElse(
+                                                "无");
         }
 }

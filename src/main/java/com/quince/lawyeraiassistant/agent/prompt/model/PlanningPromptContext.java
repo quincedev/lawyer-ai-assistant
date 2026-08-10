@@ -13,7 +13,9 @@ import java.util.Objects;
  * Agent Planning Prompt 的动态上下文。
  *
  * <p>
- * Planning 阶段根据 Goal 和 ReasonResult 生成结构化 AgentPlan。
+ * Planning 阶段根据 Goal、ReasonResult、
+ * Skill Instructions 和当前可用 Tools
+ * 生成结构化 AgentPlan。
  * </p>
  */
 @Getter
@@ -21,54 +23,100 @@ import java.util.Objects;
 @EqualsAndHashCode
 public final class PlanningPromptContext {
 
-    private final String goal;
+        private final String goal;
 
-    private final ReasonResult reasonResult;
+        private final ReasonResult reasonResult;
 
-    @Builder(toBuilder = true)
-    private PlanningPromptContext(
-            String goal,
-            ReasonResult reasonResult) {
+        private final String skillInstructions;
 
-        this.goal = normalizeGoal(goal);
+        private final String availableTools;
 
-        this.reasonResult = Objects.requireNonNull(
-                reasonResult,
-                "ReasonResult must not be null");
-    }
+        @Builder(toBuilder = true)
+        private PlanningPromptContext(
+                        String goal,
+                        ReasonResult reasonResult,
+                        String skillInstructions,
+                        String availableTools) {
 
-    public static PlanningPromptContext from(
-            String goal,
-            ReasonResult reasonResult) {
+                this.goal = normalizeGoal(
+                                goal);
 
-        return PlanningPromptContext.builder()
-                .goal(goal)
-                .reasonResult(reasonResult)
-                .build();
-    }
+                this.reasonResult = Objects.requireNonNull(
+                                reasonResult,
+                                "ReasonResult must not be null");
 
-    public Map<String, Object> toVariables() {
-        return Map.of(
-                "goal",
-                goal,
-                "reasonSummary",
-                reasonResult.getReasonSummary());
-    }
+                this.skillInstructions = normalizeSkillInstructions(
+                                skillInstructions);
 
-    private static String normalizeGoal(
-            String goal) {
-
-        Objects.requireNonNull(
-                goal,
-                "Goal must not be null");
-
-        String normalizedGoal = goal.trim();
-
-        if (normalizedGoal.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Goal must not be blank");
+                this.availableTools = normalizeAvailableTools(
+                                availableTools);
         }
 
-        return normalizedGoal;
-    }
+        public static PlanningPromptContext from(
+                        String goal,
+                        ReasonResult reasonResult,
+                        String skillInstructions,
+                        String availableTools) {
+
+                return PlanningPromptContext.builder()
+                                .goal(goal)
+                                .reasonResult(reasonResult)
+                                .skillInstructions(skillInstructions)
+                                .availableTools(availableTools)
+                                .build();
+        }
+
+        public Map<String, Object> toVariables() {
+
+                return Map.of(
+                                "goal",
+                                goal,
+                                "reasonSummary",
+                                reasonResult.getReasonSummary(),
+                                "skillInstructions",
+                                skillInstructions,
+                                "availableTools",
+                                availableTools);
+        }
+
+        private static String normalizeGoal(
+                        String goal) {
+
+                Objects.requireNonNull(
+                                goal,
+                                "Goal must not be null");
+
+                String normalizedGoal = goal.trim();
+
+                if (normalizedGoal.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                        "Goal must not be blank");
+                }
+
+                return normalizedGoal;
+        }
+
+        private static String normalizeSkillInstructions(
+                        String skillInstructions) {
+
+                if (skillInstructions == null
+                                || skillInstructions.isBlank()) {
+
+                        return "无";
+                }
+
+                return skillInstructions.trim();
+        }
+
+        private static String normalizeAvailableTools(
+                        String availableTools) {
+
+                if (availableTools == null
+                                || availableTools.isBlank()) {
+
+                        return "无";
+                }
+
+                return availableTools.trim();
+        }
 }
