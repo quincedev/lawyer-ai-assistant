@@ -20,6 +20,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgentContextTest {
 
         @Test
+        void shouldRejectBlankFinalAnswer() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> AgentContext.from("test goal")
+                                                .toBuilder()
+                                                .status(AgentStatus.FINISHED)
+                                                .finalAnswer("   ")
+                                                .build());
+
+                assertEquals(
+                                "Final answer must not be blank",
+                                exception.getMessage());
+        }
+
+        @Test
         void initialContextShouldNotHaveSkill() {
                 AgentContext context = AgentContext.from(
                                 "研究劳动合同问题");
