@@ -1,0 +1,31 @@
+server:
+    port: 8081
+
+spring:
+    application:
+        name: lawyer-ai-assistant-mcp-server
+
+    ai:
+        mcp:
+            server:
+                enabled: true
+                name: legal-mcp-server
+                version: 1.0.0
+                type: SYNC
+                protocol: STATELESS
+
+                capabilities:
+                    tool: true
+                    resource: false
+                    prompt: false
+                    completion: false
+
+                annotation-scanner:
+                    enabled: true
+
+            client:
+                enabled: false
+
+app:
+    agent:
+        legal-tool-mode: local

@@ -1,0 +1,33 @@
+server:
+    port: 8080
+
+spring:
+    application:
+        name: lawyer-ai-assistant-mcp-agent
+
+    ai:
+        mcp:
+            server:
+                enabled: false
+
+            client:
+                enabled: true
+                name: lawyer-agent-mcp-client
+                version: 1.0.0
+                type: SYNC
+                initialized: true
+                request-timeout: 30s
+
+                streamable-http:
+                    connections:
+                        legal-server:
+                            url: http://localhost:8081
+                            endpoint: /mcp
+
+app:
+    agent:
+        legal-tool-mode: mcp
+
+    rag:
+        knowledge-base:
+            enabled: false

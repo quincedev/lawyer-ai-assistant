@@ -3,59 +3,101 @@ spring:
     name: lawyer-ai-assistant
 
   ai:
-    # 明确指定当前使用的模型实现
+    # =========================================================
+    # Model
+    # =========================================================
     model:
       chat: deepseek
       embedding: ollama
 
-    # DeepSeek：负责聊天和答案生成
+    # =========================================================
+    # DeepSeek
+    # =========================================================
     deepseek:
       api-key: ${DEEPSEEK_API_KEY}
       chat:
         model: deepseek-v4-flash
 
-    # Ollama：负责本地 Embedding
+    # =========================================================
+    # Ollama Embedding
+    # =========================================================
     ollama:
       base-url: http://localhost:11434
 
       init:
-        # 模型已通过 ollama pull bge-m3 手动下载，
-        # Spring Boot 启动时不再自动拉取
+        # bge-m3 已手动下载，不在启动时自动拉取
         pull-model-strategy: never
 
       embedding:
         model: bge-m3
         truncate: true
 
+    # =========================================================
+    # MCP
+    #
+    # 默认配置下：
+    # Server 关闭
+    # Client 关闭
+    #
+    # 具体由：
+    # application-mcp-server.yaml
+    # application-mcp-agent.yaml
+    # 覆盖。
+    # =========================================================
+    mcp:
+      server:
+        enabled: false
+
+      client:
+        enabled: false
+
+# =============================================================
+# Application Configuration
+# =============================================================
 app:
+  # ===========================================================
+  # Agent Tool Mode
+  #
+  # 默认继续使用 Local Tool，
+  # 保证普通启动以及 Day13～Day15 原有能力不受影响。
+  #
+  # MCP Agent Profile 会覆盖为：
+  # legal-tool-mode: mcp
+  # ===========================================================
+  agent:
+    legal-tool-mode: local
+
+  # ===========================================================
+  # RAG
+  # ===========================================================
   rag:
     splitter:
       # 每个 Chunk 的目标 Token 数量
       chunk-size: 500
 
-      # Chunk 至少需要包含多少个字符
+      # Chunk 至少包含的字符数
       min-chunk-size-chars: 200
 
-      # 小于此长度的 Chunk 不进入后续 Embedding 流程
+      # 小于该长度的 Chunk 不进入 Embedding
       min-chunk-length-to-embed: 10
 
-      # 单个文档最多生成的 Chunk 数量
+      # 单个文档最多允许生成的 Chunk 数量
       max-num-chunks: 10000
 
-      # 切分时是否保留标点符号
+      # 切分时是否保留分隔符
       keep-separator: true
 
     legal-splitter:
-      # 每个 Chunk 的目标字符数
+      # 每个法律 Chunk 的目标字符数
       chunk-size: 500
 
-      # 相邻 Chunk 重叠的字符数
+      # 相邻 Chunk 重叠字符数
       chunk-overlap: 80
 
-      # 达到目标长度后，向前寻找标点的最大范围
+      # 达到目标长度后向前寻找标点的最大范围
       boundary-search-size: 120
 
-      # 过短的 Chunk 不保留
+      # 过短 Chunk 不保留
       min-chunk-size: 30
 
     knowledge-base:
@@ -66,17 +108,23 @@ app:
       top-k: 5
       similarity-threshold: 0.0
 
+# =============================================================
+# Logging
+# =============================================================
 logging:
   level:
     com.quince.lawyeraiassistant.advisor.LoggingAdvisorV2: DEBUG
 
+# =============================================================
+# Agent Runtime
+# =============================================================
 agent:
   runtime:
-    # 单次 Agent Runtime 最多执行多少个 Action
+    # 单次 Agent Runtime 最大 Action 数量
     max-steps: 10
 
-    # 同一个 Task 最多允许 RETRY 的次数
+    # 单个 Task 最大 Retry 次数
     max-retries-per-task: 2
 
-    # 单次 Agent Runtime 最多允许 REPLAN 的次数
+    # 单次 Runtime 最大 Replan 次数
     max-replans: 2

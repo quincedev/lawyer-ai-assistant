@@ -1,0 +1,15 @@
+spring:
+    ai:
+        mcp:
+            client:
+                enabled: true
+                name: legal-mcp-smoke-client
+                version: 1.0.0
+                type: SYNC
+                initialized: true
+
+                streamable-http:
+                    connections:
+                        legal-server:
+                            url: http://localhost:8080
+                            endpoint: /mcp

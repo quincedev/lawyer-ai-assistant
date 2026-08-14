@@ -25,7 +25,7 @@ import com.quince.lawyeraiassistant.workflow.service.LegalAgentWorkflowService;
  * </p>
  */
 @RestController
-@RequestMapping("/api/playground")
+@RequestMapping("/api/playground/")
 public class WorkflowPlaygroundController {
 
     private final LegalAgentWorkflowService legalAgentWorkflowService;
