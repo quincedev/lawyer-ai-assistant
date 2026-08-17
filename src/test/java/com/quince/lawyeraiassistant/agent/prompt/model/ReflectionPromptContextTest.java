@@ -1,11 +1,13 @@
 package com.quince.lawyeraiassistant.agent.prompt.model;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.prompt.builder.ReflectionPromptContextBuilder;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
 
 import java.util.Map;
 
@@ -15,8 +17,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReflectionPromptContextTest {
 
-        private final ReflectionPromptContextBuilder builder =
-                        new ReflectionPromptContextBuilder();
+        private ReflectionPromptContextBuilder builder;
+
+        @BeforeEach
+        void setUp() {
+
+                builder = new ReflectionPromptContextBuilder(
+                                new LegalEvidencePromptFormatter());
+        }
 
         @Test
         void shouldCreatePromptContext() {

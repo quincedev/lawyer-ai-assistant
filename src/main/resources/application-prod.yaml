@@ -1,0 +1,75 @@
+# =============================================================
+# Production Security Configuration
+# =============================================================
+
+spring:
+    ai:
+        # Production 默认不主动开启 MCP。
+        # 具体 MCP Role 必须通过对应 Profile 显式开启。
+        mcp:
+            server:
+                enabled: false
+
+            client:
+                enabled: false
+
+# =============================================================
+# Logging
+# =============================================================
+logging:
+    level:
+        # Production 禁止输出完整 Prompt / Response DEBUG 日志。
+        com.quince.lawyeraiassistant.advisor.LoggingAdvisorV2: INFO
+
+        # Security Audit 保持可见。
+        SECURITY_AUDIT: INFO
+
+# =============================================================
+# Actuator
+# =============================================================
+management:
+    endpoints:
+        web:
+            exposure:
+                include:
+                    - health
+                    - metrics
+
+    endpoint:
+        health:
+            show-details: never
+
+# =============================================================
+# Agent Runtime Security
+# =============================================================
+agent:
+    runtime:
+        max-steps: 10
+
+        max-tool-calls: 8
+
+        max-retries: 3
+
+        max-replans: 2
+
+        max-execution-time: 120s
+
+        max-tool-execution-time: 30s
+
+        max-observation-length: 20000
+
+        max-context-length: 60000
+
+# =============================================================
+# Security Guardrails
+# =============================================================
+security:
+    guardrail:
+        input:
+            max-length: 10000
+
+            prompt-injection:
+                block-threshold: 2
+
+        output:
+            max-length: 20000

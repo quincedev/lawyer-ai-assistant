@@ -5,10 +5,11 @@ import com.quince.lawyeraiassistant.agent.model.AgentActionDecision;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
-import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
+
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -21,6 +22,8 @@ import java.util.stream.Collectors;
 @Component
 public class SpringAiAgentActionSelector
                 implements AgentActionSelector {
+
+        private final LegalEvidencePromptFormatter evidencePromptFormatter;
 
         private final ChatClient chatClient;
 
@@ -37,6 +40,7 @@ public class SpringAiAgentActionSelector
                         AgentActionDecisionMapper decisionMapper,
                         AgentToolRegistry toolRegistry,
                         SkillToolScope skillToolScope,
+                        LegalEvidencePromptFormatter evidencePromptFormatter,
                         @Value("classpath:/prompts/agent/action-selection.st") Resource actionSelectionPrompt) {
 
                 this.chatClient = Objects.requireNonNull(
@@ -59,6 +63,10 @@ public class SpringAiAgentActionSelector
                 this.actionSelectionPrompt = Objects.requireNonNull(
                                 actionSelectionPrompt,
                                 "actionSelectionPrompt must not be null");
+
+                this.evidencePromptFormatter = Objects.requireNonNull(
+                                evidencePromptFormatter,
+                                "LegalEvidencePromptFormatter must not be null");
         }
 
         @Override
@@ -136,7 +144,7 @@ public class SpringAiAgentActionSelector
                 String toolObservations = context.getObservations()
                                 .stream()
                                 .map(
-                                                this::formatToolObservation)
+                                                evidencePromptFormatter::format)
                                 .collect(
                                                 Collectors.joining(
                                                                 "\n\n"));
@@ -173,40 +181,6 @@ public class SpringAiAgentActionSelector
                 return String.join(
                                 "\n",
                                 effectiveToolNames);
-        }
-
-        private String formatToolObservation(
-                        ToolObservation observation) {
-
-                if (observation.isFailure()) {
-
-                        return """
-                                        [TOOL]
-                                        Task: %s
-                                        Tool: %s
-                                        Status: FAILED
-                                        Error: %s
-                                        """
-                                        .formatted(
-                                                        observation.getTaskId(),
-                                                        observation.getToolName(),
-                                                        observation.getErrorMessage())
-                                        .trim();
-                }
-
-                return """
-                                [TOOL]
-                                Task: %s
-                                Tool: %s
-                                Status: SUCCESS
-                                Result:
-                                %s
-                                """
-                                .formatted(
-                                                observation.getTaskId(),
-                                                observation.getToolName(),
-                                                observation.getContent())
-                                .trim();
         }
 
         private String formatRuntimeReasonObservation(

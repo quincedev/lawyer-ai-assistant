@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.agent.tool;
 
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 
 /**
  * Agent Tool 的统一 SPI。
@@ -37,4 +38,9 @@ public interface AgentTool {
      */
     ToolExecutionResult execute(
             ToolAction action);
+
+    default SecuritySource resultSecuritySource() {
+
+        return SecuritySource.TOOL_RESULT;
+    }
 }

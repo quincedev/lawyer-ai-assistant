@@ -3,8 +3,9 @@ package com.quince.lawyeraiassistant.agent.prompt.builder;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
-import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.prompt.model.FinalAnswerPromptContext;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
+
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
@@ -21,141 +22,121 @@ import java.util.stream.Collectors;
 @Component
 public class FinalAnswerPromptContextBuilder {
 
-    public FinalAnswerPromptContext build(
-            AgentContext context) {
+        private final LegalEvidencePromptFormatter evidencePromptFormatter;
 
-        Objects.requireNonNull(
-                context,
-                "AgentContext must not be null");
+        public FinalAnswerPromptContextBuilder(
+                        LegalEvidencePromptFormatter evidencePromptFormatter) {
 
-        String reasonSummary = context.hasReasonResult()
-                ? context.getReasonResult()
-                        .getReasonSummary()
-                : null;
-
-        String plan = formatPlan(
-                context);
-
-        String observations = formatObservations(
-                context);
-
-        return new FinalAnswerPromptContext(
-                context.getGoal(),
-                reasonSummary,
-                plan,
-                observations);
-    }
-
-    private String formatPlan(
-            AgentContext context) {
-
-        if (context.getAgentPlan() == null
-                || context.getAgentPlan()
-                        .getTasks()
-                        .isEmpty()) {
-
-            return null;
+                this.evidencePromptFormatter = Objects.requireNonNull(
+                                evidencePromptFormatter,
+                                "LegalEvidencePromptFormatter must not be null");
         }
 
-        return context.getAgentPlan()
-                .getTasks()
-                .stream()
-                .map(
-                        this::formatTask)
-                .collect(
-                        Collectors.joining(
-                                "\n"));
-    }
+        public FinalAnswerPromptContext build(
+                        AgentContext context) {
 
-    private String formatTask(
-            AgentTask task) {
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
 
-        return "%s | %s | %s".formatted(
-                task.getId(),
-                task.getStatus(),
-                task.getDescription());
-    }
+                String reasonSummary = context.hasReasonResult()
+                                ? context.getReasonResult()
+                                                .getReasonSummary()
+                                : null;
 
-    private String formatObservations(
-            AgentContext context) {
+                String plan = formatPlan(
+                                context);
 
-        String toolObservations = context.getObservations()
-                .stream()
-                .map(
-                        this::formatObservation)
-                .collect(
-                        Collectors.joining(
-                                "\n\n---\n\n"));
+                String observations = formatObservations(
+                                context);
 
-        String runtimeReasonObservations = context.getRuntimeReasonObservations()
-                .stream()
-                .map(
-                        this::formatRuntimeReasonObservation)
-                .collect(
-                        Collectors.joining(
-                                "\n\n---\n\n"));
-
-        if (toolObservations.isBlank()
-                && runtimeReasonObservations.isBlank()) {
-
-            return null;
+                return new FinalAnswerPromptContext(
+                                context.getGoal(),
+                                reasonSummary,
+                                plan,
+                                observations);
         }
 
-        if (toolObservations.isBlank()) {
-            return runtimeReasonObservations;
+        private String formatPlan(
+                        AgentContext context) {
+
+                if (context.getAgentPlan() == null
+                                || context.getAgentPlan()
+                                                .getTasks()
+                                                .isEmpty()) {
+
+                        return null;
+                }
+
+                return context.getAgentPlan()
+                                .getTasks()
+                                .stream()
+                                .map(
+                                                this::formatTask)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n"));
         }
 
-        if (runtimeReasonObservations.isBlank()) {
-            return toolObservations;
+        private String formatTask(
+                        AgentTask task) {
+
+                return "%s | %s | %s".formatted(
+                                task.getId(),
+                                task.getStatus(),
+                                task.getDescription());
         }
 
-        return toolObservations
-                + "\n\n---\n\n"
-                + runtimeReasonObservations;
-    }
+        private String formatObservations(
+                        AgentContext context) {
 
-    private String formatRuntimeReasonObservation(
-            RuntimeReasonObservation observation) {
+                String toolObservations = context.getObservations()
+                                .stream()
+                                .map(
+                                                evidencePromptFormatter::format)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n\n---\n\n"));
 
-        return """
-                Type: REASON
-                Task: %s
-                Result:
-                %s
-                """.formatted(
-                observation.getTaskId(),
-                observation.getContent())
-                .trim();
-    }
+                String runtimeReasonObservations = context.getRuntimeReasonObservations()
+                                .stream()
+                                .map(
+                                                this::formatRuntimeReasonObservation)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n\n---\n\n"));
 
-    private String formatObservation(
-            ToolObservation observation) {
+                if (toolObservations.isBlank()
+                                && runtimeReasonObservations.isBlank()) {
 
-        if (observation.isFailure()) {
+                        return null;
+                }
 
-            return """
-                    Task: %s
-                    Tool: %s
-                    Status: FAILED
-                    Error:
-                    %s
-                    """.formatted(
-                    observation.getTaskId(),
-                    observation.getToolName(),
-                    observation.getErrorMessage())
-                    .trim();
+                if (toolObservations.isBlank()) {
+                        return runtimeReasonObservations;
+                }
+
+                if (runtimeReasonObservations.isBlank()) {
+                        return toolObservations;
+                }
+
+                return toolObservations
+                                + "\n\n---\n\n"
+                                + runtimeReasonObservations;
         }
 
-        return """
-                Task: %s
-                Tool: %s
-                Status: SUCCESS
-                Result:
-                %s
-                """.formatted(
-                observation.getTaskId(),
-                observation.getToolName(),
-                observation.getContent())
-                .trim();
-    }
+        private String formatRuntimeReasonObservation(
+                        RuntimeReasonObservation observation) {
+
+                return """
+                                Type: REASON
+                                Task: %s
+                                Result:
+                                %s
+                                """.formatted(
+                                observation.getTaskId(),
+                                observation.getContent())
+                                .trim();
+        }
+
 }

@@ -3,6 +3,13 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.tool.AgentTool;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.guardrail.exception.McpToolResultSecurityViolationException;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityResult;
+import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -49,9 +56,15 @@ public class McpLegalKnowledgeTool
 
         private final ObjectMapper objectMapper;
 
+        private final McpToolResultSecurityService resultSecurityService;
+
+        private final SecurityAuditLogger securityAuditLogger;
+
         public McpLegalKnowledgeTool(
                         SyncMcpToolCallbackProvider toolCallbackProvider,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        McpToolResultSecurityService resultSecurityService,
+                        SecurityAuditLogger securityAuditLogger) {
 
                 Objects.requireNonNull(
                                 toolCallbackProvider,
@@ -60,6 +73,14 @@ public class McpLegalKnowledgeTool
                 this.objectMapper = Objects.requireNonNull(
                                 objectMapper,
                                 "objectMapper must not be null");
+
+                this.resultSecurityService = Objects.requireNonNull(
+                                resultSecurityService,
+                                "resultSecurityService must not be null");
+
+                this.securityAuditLogger = Objects.requireNonNull(
+                                securityAuditLogger,
+                                "securityAuditLogger must not be null");
 
                 this.toolCallback = resolveToolCallback(
                                 toolCallbackProvider);
@@ -100,15 +121,46 @@ public class McpLegalKnowledgeTool
                                                 "MCP tool returned empty result");
                         }
 
+                        McpToolResultSecurityResult securityResult = resultSecurityService.evaluate(
+                                        TOOL_NAME,
+                                        result);
+
+                        if (securityResult.isDenied()) {
+
+                                securityAuditLogger.log(
+                                                SecurityAuditEvent.warn(
+                                                                SecurityAuditEventType.MCP_RESULT_SECURITY_REJECTED,
+                                                                "McpLegalKnowledgeTool",
+                                                                securityResult.reason(),
+                                                                Map.of(
+                                                                                "toolName",
+                                                                                securityResult.toolName(),
+                                                                                "policyName",
+                                                                                securityResult.policyName())));
+
+                                throw new McpToolResultSecurityViolationException(
+                                                securityResult);
+                        }
+
                         return ToolExecutionResult.success(
                                         result);
+
+                } catch (McpToolResultSecurityViolationException exception) {
+
+                        return ToolExecutionResult.failure(
+                                        "MCP tool result was rejected by security policy");
 
                 } catch (RuntimeException exception) {
 
                         return ToolExecutionResult.failure(
-                                        resolveErrorMessage(
-                                                        exception));
+                                        "MCP tool execution failed");
                 }
+        }
+
+        @Override
+        public SecuritySource resultSecuritySource() {
+
+                return SecuritySource.MCP_RESULT;
         }
 
         private ToolCallback resolveToolCallback(
@@ -161,21 +213,6 @@ public class McpLegalKnowledgeTool
                                                         + ": "
                                                         + action.getToolName());
                 }
-        }
-
-        private String resolveErrorMessage(
-                        RuntimeException exception) {
-
-                String message = exception.getMessage();
-
-                if (message == null
-                                || message.isBlank()) {
-
-                        return exception.getClass()
-                                        .getSimpleName();
-                }
-
-                return message.trim();
         }
 
         private String normalizeMcpResult(

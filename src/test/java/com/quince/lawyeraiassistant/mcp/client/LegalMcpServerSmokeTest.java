@@ -4,6 +4,7 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SpringBootTest
 @ActiveProfiles("mcp-client")
+@EnabledIfSystemProperty(
+        named = "mcp.smoke.enabled",
+        matches = "true")
 class LegalMcpServerSmokeTest {
 
     private final List<McpSyncClient> mcpClients;

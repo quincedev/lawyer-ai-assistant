@@ -4,6 +4,9 @@ import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityResult;
+import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,230 +25,270 @@ import static org.mockito.Mockito.when;
 
 class LegalMcpToolsTest {
 
-    private RetrievalOrchestrator retrievalOrchestrator;
+        private RetrievalOrchestrator retrievalOrchestrator;
 
-    private LegalRetrievalResultFormatter resultFormatter;
+        private LegalRetrievalResultFormatter resultFormatter;
 
-    private LegalMcpTools legalMcpTools;
+        private LegalMcpTools legalMcpTools;
 
-    @BeforeEach
-    void setUp() {
+        private McpToolSecurityService securityService;
 
-        retrievalOrchestrator = mock(
-                RetrievalOrchestrator.class);
+        private SecurityAuditLogger securityAuditLogger;
 
-        resultFormatter = new LegalRetrievalResultFormatter();
+        @BeforeEach
+        void setUp() {
 
-        legalMcpTools = new LegalMcpTools(
-                retrievalOrchestrator,
-                resultFormatter);
-    }
+                retrievalOrchestrator = mock(
+                                RetrievalOrchestrator.class);
 
-    @Test
-    void shouldSearchLegalKnowledge() {
+                resultFormatter = new LegalRetrievalResultFormatter();
 
-        QueryContext queryContext = QueryContext.builder()
-                .question(
-                        "违法解除劳动合同有什么责任")
-                .rewriteQuery(
-                        "违法解除劳动合同赔偿责任")
-                .build();
+                securityService = mock(
+                                McpToolSecurityService.class);
 
-        Document document = new Document(
-                "doc-1",
-                "第八十七条规定，用人单位违法解除劳动合同，应当支付赔偿金。",
-                Map.of(
-                        "file_name",
-                        "Labor-Contract-Law.pdf",
-                        "page_number",
-                        24));
+                securityAuditLogger = mock(SecurityAuditLogger.class);
 
-        RetrieverContext retrievalContext = RetrieverContext.builder()
-                .queryContext(
-                        queryContext)
-                .documents(
-                        List.of(
-                                document))
-                .build();
+                when(
+                                securityService.evaluate(
+                                                org.mockito.ArgumentMatchers.anyString(),
+                                                org.mockito.ArgumentMatchers.anyMap()))
+                                .thenAnswer(
+                                                invocation -> McpToolSecurityResult.allow(
+                                                                invocation.getArgument(0),
+                                                                "testMcpSecurity"));
 
-        when(
-                retrievalOrchestrator.retrieve(
-                        "违法解除劳动合同有什么责任"))
-                .thenReturn(
-                        retrievalContext);
+                legalMcpTools = new LegalMcpTools(
+                                retrievalOrchestrator,
+                                resultFormatter,
+                                securityService,
+                                securityAuditLogger);
+        }
 
-        String result = legalMcpTools.searchLegalKnowledge(
-                "违法解除劳动合同有什么责任");
+        @Test
+        void shouldSearchLegalKnowledge() {
 
-        assertTrue(
-                result.contains(
-                        "有效检索问题：违法解除劳动合同赔偿责任"));
+                QueryContext queryContext = QueryContext.builder()
+                                .question(
+                                                "违法解除劳动合同有什么责任")
+                                .rewriteQuery(
+                                                "违法解除劳动合同赔偿责任")
+                                .build();
 
-        assertTrue(
-                result.contains(
-                        "第八十七条"));
+                Document document = new Document(
+                                "doc-1",
+                                "第八十七条规定，用人单位违法解除劳动合同，应当支付赔偿金。",
+                                Map.of(
+                                                "file_name",
+                                                "Labor-Contract-Law.pdf",
+                                                "page_number",
+                                                24));
 
-        assertTrue(
-                result.contains(
-                        "Labor-Contract-Law.pdf"));
+                RetrieverContext retrievalContext = RetrieverContext.builder()
+                                .queryContext(
+                                                queryContext)
+                                .documents(
+                                                List.of(
+                                                                document))
+                                .build();
 
-        verify(
-                retrievalOrchestrator)
-                .retrieve(
-                        "违法解除劳动合同有什么责任");
-    }
+                when(
+                                retrievalOrchestrator.retrieve(
+                                                "违法解除劳动合同有什么责任"))
+                                .thenReturn(
+                                                retrievalContext);
 
-    @Test
-    void shouldTrimLegalQuestionBeforeRetrieval() {
+                String result = legalMcpTools.searchLegalKnowledge(
+                                "违法解除劳动合同有什么责任");
 
-        RetrieverContext retrievalContext = RetrieverContext.from(
-                QueryContext.from(
-                        "劳动合同解除条件"));
+                assertTrue(
+                                result.contains(
+                                                "有效检索问题：违法解除劳动合同赔偿责任"));
 
-        when(
-                retrievalOrchestrator.retrieve(
-                        "劳动合同解除条件"))
-                .thenReturn(
-                        retrievalContext);
+                assertTrue(
+                                result.contains(
+                                                "第八十七条"));
 
-        String result = legalMcpTools.searchLegalKnowledge(
-                "   劳动合同解除条件   ");
+                assertTrue(
+                                result.contains(
+                                                "Labor-Contract-Law.pdf"));
 
-        assertEquals(
-                "未检索到与当前法律问题相关的知识。",
-                result);
+                verify(
+                                retrievalOrchestrator)
+                                .retrieve(
+                                                "违法解除劳动合同有什么责任");
+        }
 
-        verify(
-                retrievalOrchestrator)
-                .retrieve(
-                        "劳动合同解除条件");
-    }
+        @Test
+        void shouldTrimLegalQuestionBeforeRetrieval() {
 
-    @Test
-    void shouldReturnNoKnowledgeMessageWhenNoDocumentsFound() {
+                RetrieverContext retrievalContext = RetrieverContext.from(
+                                QueryContext.from(
+                                                "劳动合同解除条件"));
 
-        RetrieverContext retrievalContext = RetrieverContext.from(
-                QueryContext.from(
-                        "不存在的法律问题"));
+                when(
+                                retrievalOrchestrator.retrieve(
+                                                "劳动合同解除条件"))
+                                .thenReturn(
+                                                retrievalContext);
 
-        when(
-                retrievalOrchestrator.retrieve(
-                        "不存在的法律问题"))
-                .thenReturn(
-                        retrievalContext);
+                String result = legalMcpTools.searchLegalKnowledge(
+                                "   劳动合同解除条件   ");
 
-        String result = legalMcpTools.searchLegalKnowledge(
-                "不存在的法律问题");
+                assertEquals(
+                                "未检索到与当前法律问题相关的知识。",
+                                result);
 
-        assertEquals(
-                "未检索到与当前法律问题相关的知识。",
-                result);
-    }
+                verify(
+                                retrievalOrchestrator)
+                                .retrieve(
+                                                "劳动合同解除条件");
+        }
 
-    @Test
-    void shouldPropagateRetrievalException() {
+        @Test
+        void shouldReturnNoKnowledgeMessageWhenNoDocumentsFound() {
 
-        when(
-                retrievalOrchestrator.retrieve(
-                        "劳动合同解除条件"))
-                .thenThrow(
-                        new IllegalStateException(
-                                "VectorStore unavailable"));
+                RetrieverContext retrievalContext = RetrieverContext.from(
+                                QueryContext.from(
+                                                "不存在的法律问题"));
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> legalMcpTools.searchLegalKnowledge(
-                        "劳动合同解除条件"));
+                when(
+                                retrievalOrchestrator.retrieve(
+                                                "不存在的法律问题"))
+                                .thenReturn(
+                                                retrievalContext);
 
-        assertEquals(
-                "VectorStore unavailable",
-                exception.getMessage());
-    }
+                String result = legalMcpTools.searchLegalKnowledge(
+                                "不存在的法律问题");
 
-    @Test
-    void shouldRejectNullRetrievalResult() {
+                assertEquals(
+                                "未检索到与当前法律问题相关的知识。",
+                                result);
+        }
 
-        when(
-                retrievalOrchestrator.retrieve(
-                        "劳动合同解除条件"))
-                .thenReturn(
-                        null);
+        @Test
+        void shouldPropagateRetrievalException() {
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> legalMcpTools.searchLegalKnowledge(
-                        "劳动合同解除条件"));
+                when(
+                                retrievalOrchestrator.retrieve(
+                                                "劳动合同解除条件"))
+                                .thenThrow(
+                                                new IllegalStateException(
+                                                                "VectorStore unavailable"));
 
-        assertEquals(
-                "RetrievalOrchestrator must not return null",
-                exception.getMessage());
-    }
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> legalMcpTools.searchLegalKnowledge(
+                                                "劳动合同解除条件"));
 
-    @Test
-    void shouldRejectNullLegalQuestion() {
+                assertEquals(
+                                "VectorStore unavailable",
+                                exception.getMessage());
+        }
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> legalMcpTools.searchLegalKnowledge(
-                        null));
+        @Test
+        void shouldRejectNullRetrievalResult() {
 
-        assertEquals(
-                "Legal question must not be null",
-                exception.getMessage());
+                when(
+                                retrievalOrchestrator.retrieve(
+                                                "劳动合同解除条件"))
+                                .thenReturn(
+                                                null);
 
-        verify(
-                retrievalOrchestrator,
-                never())
-                .retrieve(
-                        org.mockito.ArgumentMatchers
-                                .anyString());
-    }
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> legalMcpTools.searchLegalKnowledge(
+                                                "劳动合同解除条件"));
 
-    @Test
-    void shouldRejectBlankLegalQuestion() {
+                assertEquals(
+                                "RetrievalOrchestrator must not return null",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> legalMcpTools.searchLegalKnowledge(
-                        "   "));
+        @Test
+        void shouldRejectNullLegalQuestion() {
 
-        assertEquals(
-                "Legal question must not be blank",
-                exception.getMessage());
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> legalMcpTools.searchLegalKnowledge(
+                                                null));
 
-        verify(
-                retrievalOrchestrator,
-                never())
-                .retrieve(
-                        org.mockito.ArgumentMatchers
-                                .anyString());
-    }
+                assertEquals(
+                                "Legal question must not be null",
+                                exception.getMessage());
 
-    @Test
-    void shouldRejectNullRetrievalOrchestrator() {
+                verify(
+                                retrievalOrchestrator,
+                                never())
+                                .retrieve(
+                                                org.mockito.ArgumentMatchers
+                                                                .anyString());
+        }
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> new LegalMcpTools(
-                        null,
-                        resultFormatter));
+        @Test
+        void shouldRejectBlankLegalQuestion() {
 
-        assertEquals(
-                "retrievalOrchestrator must not be null",
-                exception.getMessage());
-    }
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> legalMcpTools.searchLegalKnowledge(
+                                                "   "));
 
-    @Test
-    void shouldRejectNullResultFormatter() {
+                assertEquals(
+                                "Legal question must not be blank",
+                                exception.getMessage());
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> new LegalMcpTools(
-                        retrievalOrchestrator,
-                        null));
+                verify(
+                                retrievalOrchestrator,
+                                never())
+                                .retrieve(
+                                                org.mockito.ArgumentMatchers
+                                                                .anyString());
+        }
 
-        assertEquals(
-                "resultFormatter must not be null",
-                exception.getMessage());
-    }
+        @Test
+        void shouldRejectNullRetrievalOrchestrator() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new LegalMcpTools(
+                                                null,
+                                                resultFormatter,
+                                                securityService,
+                                                securityAuditLogger));
+
+                assertEquals(
+                                "retrievalOrchestrator must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullResultFormatter() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new LegalMcpTools(
+                                                retrievalOrchestrator,
+                                                null,
+                                                securityService,
+                                                securityAuditLogger));
+
+                assertEquals(
+                                "resultFormatter must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullMcpToolSecurityService() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new LegalMcpTools(
+                                                retrievalOrchestrator,
+                                                resultFormatter,
+                                                null,
+                                                securityAuditLogger));
+
+                assertEquals(
+                                "mcpToolSecurityService must not be null",
+                                exception.getMessage());
+        }
 }

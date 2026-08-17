@@ -1,0 +1,26 @@
+package com.quince.lawyeraiassistant.security.legal;
+
+public enum SecuritySignalType {
+
+    PROMPT_INJECTION,
+
+    INDIRECT_PROMPT_INJECTION,
+
+    PRIVILEGE_ESCALATION,
+
+    TOOL_CONTROL_ATTEMPT,
+
+    SECRET_EXTRACTION,
+
+    TOOL_AUTHORIZATION_DENIED,
+
+    MCP_TOOL_DENIED,
+
+    MCP_RESULT_REJECTED,
+
+    RUNTIME_LIMIT_REACHED,
+
+    RESOURCE_LIMIT_REACHED,
+
+    SENSITIVE_OUTPUT_DETECTED
+}

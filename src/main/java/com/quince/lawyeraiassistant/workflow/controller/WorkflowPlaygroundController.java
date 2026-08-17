@@ -11,6 +11,8 @@ import com.quince.lawyeraiassistant.agent.dto.AgentRequest;
 import com.quince.lawyeraiassistant.workflow.model.WorkflowContext;
 import com.quince.lawyeraiassistant.workflow.service.LegalAgentWorkflowService;
 
+import jakarta.validation.Valid;
+
 /**
  * 法律 Agent 工作流的开发调试接口。
  *
@@ -52,7 +54,7 @@ public class WorkflowPlaygroundController {
      */
     @PostMapping("/workflow")
     public WorkflowContext runWorkflow(
-            @RequestBody AgentRequest request) {
+            @Valid @RequestBody AgentRequest request) {
 
         return legalAgentWorkflowService.execute(
                 request.goal());

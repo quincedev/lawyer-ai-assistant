@@ -3,10 +3,18 @@ package com.quince.lawyeraiassistant.agent.tool;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
+import com.quince.lawyeraiassistant.security.SecurityTest;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,151 +26,287 @@ import static org.mockito.Mockito.when;
 
 class DefaultToolActionExecutorTest {
 
-    private AgentTool agentTool;
+        private AgentTool agentTool;
 
-    private AgentToolRegistry toolRegistry;
+        private AgentToolRegistry toolRegistry;
 
-    private DefaultToolActionExecutor executor;
+        private DefaultToolActionExecutor executor;
 
-    @BeforeEach
-    void setUp() {
+        private AgentExecutionLimits executionLimits;
 
-        agentTool = mock(
-                AgentTool.class);
+        private SecurityAuditLogger securityAuditLogger;
 
-        when(
-                agentTool.name())
-                .thenReturn(
-                        "searchLegalKnowledge");
+        @BeforeEach
+        void setUp() {
 
-        toolRegistry = new AgentToolRegistry(
-                List.of(
-                        agentTool));
+                toolRegistry = mock(AgentToolRegistry.class);
 
-        executor = new DefaultToolActionExecutor(
-                toolRegistry);
-    }
+                agentTool = mock(AgentTool.class);
 
-    @Test
-    void shouldExecuteToolSuccessfully() {
+                securityAuditLogger = mock(SecurityAuditLogger.class);
 
-        ToolAction action = ToolAction.of(
-                "task-1",
-                "searchLegalKnowledge",
-                Map.of(
-                        "legalQuestion",
-                        "违法解除劳动合同"));
+                executionLimits = new AgentExecutionLimits(
+                                10,
+                                8,
+                                2,
+                                3,
+                                Duration.ofSeconds(120),
+                                Duration.ofSeconds(30),
+                                20_000,
+                                60_000);
 
-        when(
-                agentTool.execute(
-                        action))
-                .thenReturn(
-                        ToolExecutionResult.success(
-                                "劳动合同法第八十七条规定..."));
+                when(
+                                agentTool.resultSecuritySource())
+                                .thenReturn(
+                                                SecuritySource.TOOL_RESULT);
 
-        ToolObservation observation = executor.execute(
-                action);
+                when(
+                                toolRegistry.get(
+                                                "searchLegalKnowledge"))
+                                .thenReturn(
+                                                agentTool);
 
-        assertTrue(
-                observation.isSuccess());
+                executor = new DefaultToolActionExecutor(
+                                toolRegistry,
+                                executionLimits,
+                                securityAuditLogger);
+        }
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+        @AfterEach
+        void tearDown() {
 
-        assertEquals(
-                "searchLegalKnowledge",
-                observation.getToolName());
+                executor.shutdown();
+        }
 
-        assertEquals(
-                "劳动合同法第八十七条规定...",
-                observation.getContent());
+        @Test
+        void shouldExecuteToolSuccessfully() {
 
-        verify(
-                agentTool)
-                .execute(
-                        action);
-    }
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                Map.of(
+                                                "legalQuestion",
+                                                "违法解除劳动合同"));
 
-    @Test
-    void shouldConvertFailedResultToFailedObservation() {
+                when(
+                                agentTool.execute(
+                                                action))
+                                .thenReturn(
+                                                ToolExecutionResult.success(
+                                                                "劳动合同法第八十七条规定..."));
 
-        ToolAction action = ToolAction.of(
-                "task-1",
-                "searchLegalKnowledge");
+                ToolObservation observation = executor.execute(
+                                action);
 
-        when(
-                agentTool.execute(
-                        action))
-                .thenReturn(
-                        ToolExecutionResult.failure(
-                                "VectorStore unavailable"));
+                assertTrue(
+                                observation.isSuccess());
 
-        ToolObservation observation = executor.execute(
-                action);
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        assertTrue(
-                observation.isFailure());
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                assertEquals(
+                                "劳动合同法第八十七条规定...",
+                                observation.getContent());
 
-        assertEquals(
-                "searchLegalKnowledge",
-                observation.getToolName());
+                LegalSecurityContext context = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
 
-        assertEquals(
-                "VectorStore unavailable",
-                observation.getErrorMessage());
-    }
+                assertEquals(
+                                SecuritySource.TOOL_RESULT,
+                                context.source());
 
-    @Test
-    void shouldRejectNullAction() {
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                context.trustLevel());
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> executor.execute(
-                        null));
+                verify(
+                                agentTool)
+                                .execute(
+                                                action);
+        }
 
-        assertEquals(
-                "ToolAction must not be null",
-                exception.getMessage());
-    }
+        @Test
+        void shouldConvertFailedResultToFailedObservation() {
 
-    @Test
-    void shouldRejectNullToolRegistry() {
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge");
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> new DefaultToolActionExecutor(
-                        null));
+                when(
+                                agentTool.execute(
+                                                action))
+                                .thenReturn(
+                                                ToolExecutionResult.failure(
+                                                                "VectorStore unavailable"));
 
-        assertEquals(
-                "toolRegistry must not be null",
-                exception.getMessage());
-    }
+                ToolObservation observation = executor.execute(
+                                action);
 
-    @Test
-    void shouldRejectNullToolExecutionResult() {
+                assertTrue(
+                                observation.isFailure());
 
-        ToolAction action = ToolAction.of(
-                "task-1",
-                "searchLegalKnowledge");
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        when(
-                agentTool.execute(
-                        action))
-                .thenReturn(
-                        null);
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> executor.execute(
-                        action));
+                assertEquals(
+                                "VectorStore unavailable",
+                                observation.getErrorMessage());
 
-        assertEquals(
-                "ToolExecutionResult must not be null",
-                exception.getMessage());
-    }
+                assertEquals(
+                                SecuritySource.TOOL_RESULT,
+                                observation
+                                                .getEvidenceSecurityContext()
+                                                .orElseThrow()
+                                                .source());
+        }
+
+        @Test
+        void shouldRejectNullAction() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> executor.execute(
+                                                null));
+
+                assertEquals(
+                                "ToolAction must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullToolRegistry() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new DefaultToolActionExecutor(
+                                                null,
+                                                executionLimits,
+                                                securityAuditLogger));
+
+                assertEquals(
+                                "toolRegistry must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullToolExecutionResult() {
+
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge");
+
+                when(
+                                agentTool.execute(
+                                                action))
+                                .thenReturn(
+                                                null);
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> executor.execute(
+                                                action));
+
+                assertEquals(
+                                "ToolExecutionResult must not be null",
+                                exception.getMessage());
+        }
+
+        @SecurityTest
+        @Test
+        void shouldReturnFailureObservationWhenToolExecutionTimesOut() {
+
+                AgentExecutionLimits shortLimits = new AgentExecutionLimits(
+                                10,
+                                8,
+                                2,
+                                3,
+                                Duration.ofSeconds(120),
+                                Duration.ofMillis(50),
+                                20_000,
+                                60_000);
+
+                DefaultToolActionExecutor timeoutExecutor = new DefaultToolActionExecutor(
+                                toolRegistry,
+                                shortLimits,
+                                securityAuditLogger);
+
+                try {
+
+                        ToolAction action = ToolAction.of(
+                                        "task-1",
+                                        "searchLegalKnowledge");
+
+                        when(
+                                        agentTool.execute(
+                                                        action))
+                                        .thenAnswer(
+                                                        invocation -> {
+
+                                                                Thread.sleep(
+                                                                                500);
+
+                                                                return ToolExecutionResult.success(
+                                                                                "too late");
+                                                        });
+
+                        ToolObservation observation = timeoutExecutor.execute(
+                                        action);
+
+                        assertTrue(
+                                        observation.isFailure());
+
+                        assertEquals(
+                                        "task-1",
+                                        observation.getTaskId());
+
+                        assertEquals(
+                                        "searchLegalKnowledge",
+                                        observation.getToolName());
+
+                        assertEquals(
+                                        "Tool execution timed out",
+                                        observation.getErrorMessage());
+
+                } finally {
+
+                        timeoutExecutor.shutdown();
+                }
+        }
+
+        @SecurityTest
+        @Test
+        void shouldConvertToolExceptionToFailureObservation() {
+
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                "searchLegalKnowledge");
+
+                when(
+                                agentTool.execute(
+                                                action))
+                                .thenThrow(
+                                                new IllegalStateException(
+                                                                "Vector Store unavailable"));
+
+                ToolObservation observation = executor.execute(
+                                action);
+
+                assertTrue(
+                                observation.isFailure());
+
+                assertEquals(
+                                "Vector Store unavailable",
+                                observation.getErrorMessage());
+        }
 }

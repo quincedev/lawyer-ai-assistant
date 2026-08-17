@@ -8,10 +8,20 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentRuntimeReasonService;
-import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.ToolActionExecutor;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.authorization.tool.ToolAuthorizationResult;
+import com.quince.lawyeraiassistant.security.authorization.tool.ToolAuthorizationService;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -31,13 +41,16 @@ public class DefaultAgentActionExecutionOperator
 
         private final AgentFinalAnswerService finalAnswerService;
 
-        private final SkillToolScope skillToolScope;
+        private final ToolAuthorizationService toolAuthorizationService;
+
+        private final SecurityAuditLogger securityAuditLogger;
 
         public DefaultAgentActionExecutionOperator(
                         ToolActionExecutor toolActionExecutor,
                         AgentRuntimeReasonService runtimeReasonService,
                         AgentFinalAnswerService finalAnswerService,
-                        SkillToolScope skillToolScope) {
+                        ToolAuthorizationService toolAuthorizationService,
+                        SecurityAuditLogger securityAuditLogger) {
 
                 this.toolActionExecutor = Objects.requireNonNull(
                                 toolActionExecutor,
@@ -51,9 +64,13 @@ public class DefaultAgentActionExecutionOperator
                                 finalAnswerService,
                                 "AgentFinalAnswerService must not be null");
 
-                this.skillToolScope = Objects.requireNonNull(
-                                skillToolScope,
-                                "SkillToolScope must not be null");
+                this.toolAuthorizationService = Objects.requireNonNull(
+                                toolAuthorizationService,
+                                "ToolAuthorizationService must not be null");
+
+                this.securityAuditLogger = Objects.requireNonNull(
+                                securityAuditLogger,
+                                "securityAuditLogger must not be null");
         }
 
         @Override
@@ -102,17 +119,53 @@ public class DefaultAgentActionExecutionOperator
 
                 ToolAction toolAction = action.requireToolAction();
 
-                boolean allowed = skillToolScope.isAllowed(
-                                context.getSkillContext(),
-                                toolAction.getToolName());
+                ToolAuthorizationResult authorization = toolAuthorizationService.authorize(
+                                context,
+                                toolAction);
 
-                if (!allowed) {
+                if (authorization.isDenied()) {
+                        LegalSecurityContext securityContext = context.getLegalSecurityContext()
+                                        .orElse(null);
+
+                        Map<String, String> metadata = new HashMap<>();
+
+                        metadata.put(
+                                        "toolName",
+                                        toolAction.getToolName());
+
+                        metadata.put(
+                                        "taskId",
+                                        toolAction.getTaskId());
+
+                        metadata.put(
+                                        "policyName",
+                                        authorization.policyName());
+
+                        if (securityContext != null) {
+
+                                metadata.put(
+                                                "source",
+                                                securityContext.source().name());
+
+                                metadata.put(
+                                                "trustLevel",
+                                                securityContext.trustLevel().name());
+                        }
+
+                        securityAuditLogger.log(
+                                        SecurityAuditEvent.warn(
+                                                        SecurityAuditEventType.TOOL_AUTHORIZATION_DENIED,
+                                                        "DefaultAgentActionExecutionOperator",
+                                                        authorization.reason(),
+                                                        metadata));
 
                         ToolObservation deniedObservation = ToolObservation.failure(
                                         toolAction.getTaskId(),
                                         toolAction.getToolName(),
-                                        "Tool is not allowed by current Skill: "
-                                                        + toolAction.getToolName());
+                                        authorization.reason(),
+                                        LegalSecurityContext.of(
+                                                        SecuritySource.RUNTIME,
+                                                        SecurityTrustLevel.DERIVED));
 
                         return AgentActionExecutionResult.tool(
                                         deniedObservation);

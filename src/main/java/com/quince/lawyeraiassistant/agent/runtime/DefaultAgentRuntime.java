@@ -18,11 +18,24 @@ import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.skill.selector.AgentSkillSelector;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidenceTrustPolicy;
+import com.quince.lawyeraiassistant.security.runtime.AgentExecutionBudget;
+import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
+import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailOperation;
+import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailResult;
+import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailService;
+import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceGuardrailService;
+import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceResult;
+import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceType;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,11 +59,15 @@ public class DefaultAgentRuntime
 
         private final AgentSkillSelector skillSelector;
 
-        private final int maxSteps;
+        private final AgentExecutionLimits executionLimits;
 
-        private final int maxRetriesPerTask;
+        private final RuntimeGuardrailService runtimeGuardrailService;
 
-        private final int maxReplans;
+        private final RuntimeResourceGuardrailService runtimeResourceGuardrailService;
+
+        private final LegalEvidenceTrustPolicy legalEvidenceTrustPolicy;
+
+        private final SecurityAuditLogger securityAuditLogger;
 
         public DefaultAgentRuntime(
                         AgentPipeline agentPipeline,
@@ -60,9 +77,11 @@ public class DefaultAgentRuntime
                         AgentReflectionService reflectionService,
                         AgentReplanningService replanningService,
                         AgentFinalAnswerService finalAnswerService,
-                        @Value("${agent.runtime.max-steps:10}") int maxSteps,
-                        @Value("${agent.runtime.max-retries-per-task:2}") int maxRetriesPerTask,
-                        @Value("${agent.runtime.max-replans:2}") int maxReplans) {
+                        AgentExecutionLimits executionLimits,
+                        RuntimeGuardrailService runtimeGuardrailService,
+                        RuntimeResourceGuardrailService runtimeResourceGuardrailService,
+                        LegalEvidenceTrustPolicy legalEvidenceTrustPolicy,
+                        SecurityAuditLogger securityAuditLogger) {
 
                 this.agentPipeline = Objects.requireNonNull(
                                 agentPipeline,
@@ -92,26 +111,25 @@ public class DefaultAgentRuntime
                                 finalAnswerService,
                                 "finalAnswerService must not be null");
 
-                if (maxSteps <= 0) {
-                        throw new IllegalArgumentException(
-                                        "maxSteps must be greater than zero");
-                }
+                this.executionLimits = Objects.requireNonNull(
+                                executionLimits,
+                                "executionLimits must not be null");
 
-                if (maxRetriesPerTask < 0) {
-                        throw new IllegalArgumentException(
-                                        "maxRetriesPerTask must not be negative");
-                }
+                this.runtimeGuardrailService = Objects.requireNonNull(
+                                runtimeGuardrailService,
+                                "runtimeGuardrailService must not be null");
 
-                if (maxReplans < 0) {
-                        throw new IllegalArgumentException(
-                                        "maxReplans must not be negative");
-                }
+                this.runtimeResourceGuardrailService = Objects.requireNonNull(
+                                runtimeResourceGuardrailService,
+                                "runtimeResourceGuardrailService must not be null");
 
-                this.maxSteps = maxSteps;
+                this.legalEvidenceTrustPolicy = Objects.requireNonNull(
+                                legalEvidenceTrustPolicy,
+                                "legalEvidenceTrustPolicy must not be null");
 
-                this.maxRetriesPerTask = maxRetriesPerTask;
-
-                this.maxReplans = maxReplans;
+                this.securityAuditLogger = Objects.requireNonNull(
+                                securityAuditLogger,
+                                "securityAuditLogger must not be null");
         }
 
         @Override
@@ -122,31 +140,46 @@ public class DefaultAgentRuntime
                                 context,
                                 "AgentContext must not be null");
 
+                /*
+                 * 每次 Agent Execution 独享一个 Budget。
+                 *
+                 * DefaultAgentRuntime 是 Singleton Bean，
+                 * 所以 Budget 绝不能放到成员变量中。
+                 */
+                AgentExecutionBudget budget = new AgentExecutionBudget(
+                                executionLimits);
+
                 AgentContext skillAwareContext = attachSelectedSkill(
                                 context);
 
                 /*
-                 * Initialization:
+                 * =====================================================
+                 * Initialization
                  *
                  * Reason
                  * ↓
                  * Planning
+                 *
+                 * Initial Planning 不计入 REPLAN Budget。
+                 * =====================================================
                  */
                 AgentContext current = agentPipeline.execute(
                                 skillAwareContext);
 
-                int executedSteps = 0;
-
-                int replanCount = 0;
-
-                Map<String, Integer> retryCounts = new HashMap<>();
-
                 /*
-                 * Full Agent Loop:
+                 * =====================================================
+                 * Full Agent Runtime Loop
+                 * =====================================================
                  *
-                 * Current Task
+                 * Pending Task
+                 * ↓
+                 * Runtime STEP Guardrail
+                 * ↓
+                 * PENDING → RUNNING
                  * ↓
                  * Action Selection
+                 * ↓
+                 * TOOL_CALL Guardrail
                  * ↓
                  * Action Execution
                  * ↓
@@ -157,18 +190,72 @@ public class DefaultAgentRuntime
                  * CONTINUE / RETRY / REPLAN / FINISH
                  */
                 while (hasPendingTask(
-                                current)
-                                && executedSteps < maxSteps) {
+                                current)) {
 
                         /*
-                         * 1. Resolve current task.
+                         * =================================================
+                         * 1. STEP Guardrail
+                         * =================================================
+                         */
+                        RuntimeGuardrailResult stepDecision = runtimeGuardrailService.evaluate(
+                                        RuntimeGuardrailOperation.STEP,
+                                        budget);
+
+                        if (stepDecision.isDenied()) {
+
+                                auditRuntimeLimit(
+                                                RuntimeGuardrailOperation.STEP,
+                                                stepDecision);
+
+                                return finishWithFallback(
+                                                current,
+                                                stepDecision.reason());
+                        }
+
+                        /*
+                         * =================================================
+                         * 2. CONTEXT Resource Guardrail
+                         * =================================================
+                         *
+                         * 在下一次 Action Selection / LLM 调用之前，
+                         * 检查当前 Agent Context 的近似字符规模。
+                         *
+                         * Context 一旦超限，不再调用模型生成 fallback，
+                         * 避免使用已经超大的 Context 再触发一次 LLM 调用。
+                         */
+                        int contextLength = estimateContextLength(
+                                        current);
+
+                        RuntimeResourceResult contextDecision = runtimeResourceGuardrailService.evaluate(
+                                        RuntimeResourceType.CONTEXT,
+                                        contextLength);
+
+                        if (contextDecision.isDenied()) {
+
+                                auditResourceLimit(
+                                                RuntimeResourceType.CONTEXT,
+                                                contextLength,
+                                                contextDecision,
+                                                null);
+
+                                return finishWithoutModel(
+                                                current,
+                                                contextDecision.reason());
+                        }
+
+                        /*
+                         * =================================================
+                         * 3. Resolve current Task
+                         * =================================================
                          */
                         AgentTask pendingTask = current.getAgentPlan()
                                         .nextPendingTask()
                                         .orElseThrow();
 
                         /*
-                         * 2. PENDING → RUNNING
+                         * =================================================
+                         * 4. PENDING → RUNNING
+                         * =================================================
                          */
                         current = updateTaskStatus(
                                         current,
@@ -181,35 +268,101 @@ public class DefaultAgentRuntime
                                         .orElseThrow();
 
                         /*
-                         * 3. Decide.
+                         * =================================================
+                         * 5. Action Selection
+                         * =================================================
                          */
                         AgentAction action = actionSelector.select(
                                         current,
                                         runningTask);
 
+                        Objects.requireNonNull(
+                                        action,
+                                        "AgentAction must not be null");
+
                         /*
-                         * 4. Act.
+                         * =================================================
+                         * 6. TOOL_CALL Guardrail
+                         * =================================================
+                         *
+                         * 当前定义：
+                         *
+                         * maxToolCalls 实际约束的是 Tool Action Attempt。
+                         *
+                         * 即使后面 ToolAuthorization DENY，
+                         * 这次由 Agent 发起的 Tool Action 仍然消耗一次 Runtime
+                         * Tool Budget。
+                         *
+                         * 这是更保守的安全模型。
+                         */
+                        if (action.isTool()) {
+
+                                RuntimeGuardrailResult toolCallDecision = runtimeGuardrailService.evaluate(
+                                                RuntimeGuardrailOperation.TOOL_CALL,
+                                                budget);
+
+                                if (toolCallDecision.isDenied()) {
+
+                                        auditRuntimeLimit(
+                                                        RuntimeGuardrailOperation.TOOL_CALL,
+                                                        toolCallDecision);
+
+                                        return finishWithFallback(
+                                                        current,
+                                                        toolCallDecision.reason());
+                                }
+                        }
+
+                        /*
+                         * =================================================
+                         * 7. Action Execution
+                         * =================================================
                          */
                         AgentActionExecutionResult result = actionExecutionOperator.execute(
                                         current,
                                         runningTask,
                                         action);
 
+                        Objects.requireNonNull(
+                                        result,
+                                        "AgentActionExecutionResult must not be null");
+
                         /*
-                         * 5. Observe / Apply.
+                         * Tool Action 已经越过 Runtime Execution Boundary。
+                         *
+                         * 无论最终：
+                         *
+                         * - Tool Success
+                         * - Tool Failure
+                         * - Tool Authorization DENY
+                         *
+                         * 当前版本都记为一次 Tool Action Attempt。
+                         */
+                        if (action.isTool()) {
+
+                                budget.recordToolCall();
+                        }
+
+                        /*
+                         * 一个完整 Runtime Execution Cycle 已经发生。
+                         */
+                        budget.recordStep();
+
+                        /*
+                         * =================================================
+                         * 8. Observe / Apply
+                         * =================================================
                          */
                         current = applyExecutionResult(
                                         current,
                                         runningTask,
                                         result);
 
-                        executedSteps++;
-
                         /*
-                         * FINAL_ANSWER is terminal.
+                         * FINAL_ANSWER 是 Terminal Action。
                          *
                          * Final Answer 已经生成，
-                         * 不需要再次 Reflection。
+                         * 无需再次 Reflection。
                          */
                         if (current.hasFinalAnswer()) {
 
@@ -218,92 +371,82 @@ public class DefaultAgentRuntime
                         }
 
                         /*
-                         * 6. Reflect.
+                         * =================================================
+                         * 9. Reflection
+                         * =================================================
                          */
                         ReflectionResult reflectionResult = reflectionService.reflect(
                                         current,
                                         runningTask);
 
+                        Objects.requireNonNull(
+                                        reflectionResult,
+                                        "ReflectionResult must not be null");
+
                         /*
-                         * =====================================================
-                         * RETRY Guardrail
-                         * =====================================================
+                         * =================================================
+                         * 10. RETRY Guardrail
+                         * =================================================
+                         *
+                         * 新模型：
+                         *
+                         * Retry Budget 属于整个 Agent Execution，
+                         * 不再是 per-task retry counter。
                          */
                         if (reflectionResult.shouldRetry()) {
 
-                                int retryCount = retryCounts.getOrDefault(
-                                                runningTask.getId(),
-                                                0);
+                                RuntimeGuardrailResult retryDecision = runtimeGuardrailService.evaluate(
+                                                RuntimeGuardrailOperation.RETRY,
+                                                budget);
 
-                                /*
-                                 * maxRetriesPerTask = 2 时：
-                                 *
-                                 * 初始执行
-                                 * RETRY #1
-                                 * RETRY #2
-                                 *
-                                 * 第三次再次要求 RETRY 时，
-                                 * Guardrail 生效。
-                                 */
-                                if (retryCount >= maxRetriesPerTask) {
+                                if (retryDecision.isDenied()) {
+
+                                        auditRuntimeLimit(
+                                                        RuntimeGuardrailOperation.RETRY,
+                                                        retryDecision);
 
                                         return finishWithFallback(
                                                         current,
-                                                        "Maximum retries reached for task: "
-                                                                        + runningTask.getId());
+                                                        retryDecision.reason());
                                 }
 
-                                retryCounts.put(
-                                                runningTask.getId(),
-                                                retryCount + 1);
+                                budget.recordRetry();
                         }
 
                         /*
-                         * =====================================================
-                         * REPLAN Guardrail
-                         * =====================================================
+                         * =================================================
+                         * 11. REPLAN Guardrail
+                         * =================================================
                          */
                         if (reflectionResult.shouldReplan()) {
 
-                                if (replanCount >= maxReplans) {
+                                RuntimeGuardrailResult replanDecision = runtimeGuardrailService.evaluate(
+                                                RuntimeGuardrailOperation.REPLAN,
+                                                budget);
+
+                                if (replanDecision.isDenied()) {
+
+                                        auditRuntimeLimit(
+                                                        RuntimeGuardrailOperation.REPLAN,
+                                                        replanDecision);
 
                                         return finishWithFallback(
                                                         current,
-                                                        "Maximum replans reached");
+                                                        replanDecision.reason());
                                 }
 
-                                replanCount++;
+                                budget.recordReplan();
                         }
 
                         /*
-                         * 7. Apply Reflection Decision.
+                         * =================================================
+                         * 12. Apply Reflection Decision
+                         * =================================================
                          */
                         current = handleReflectionDecision(
                                         current,
                                         runningTask,
                                         reflectionResult);
-
-                        /*
-                         * 当前任务已经正常完成，
-                         * 不再需要保存它的 Retry 计数。
-                         */
-                        if (reflectionResult.shouldContinue()
-                                        || reflectionResult.shouldFinish()) {
-
-                                retryCounts.remove(
-                                                runningTask.getId());
-                        }
-
-                        /*
-                         * Replanning 得到的是新的 Plan。
-                         *
-                         * 新 Plan 的 Task 即使 ID 与旧 Plan 相同，
-                         * 也应重新获得完整 Retry Budget。
-                         */
-                        if (reflectionResult.shouldReplan()) {
-
-                                retryCounts.clear();
-                        }
 
                         /*
                          * FINISH decision is terminal.
@@ -315,31 +458,25 @@ public class DefaultAgentRuntime
                 }
 
                 /*
-                 * 所有 Pending Task 已经执行完成，
-                 * 但没有显式产生 FINAL_ANSWER。
-                 */
-                if (!hasPendingTask(
-                                current)) {
-
-                        current = ensureFinalAnswer(
-                                        current);
-
-                        return markFinished(
-                                        current);
-                }
-
-                /*
-                 * maxSteps exhausted.
+                 * =====================================================
+                 * All Pending Tasks completed
+                 * =====================================================
                  *
-                 * 不再返回 RUNNING，
-                 * 而是根据已有上下文生成 best-effort answer，
-                 * 然后安全结束。
+                 * Plan 已经执行结束，
+                 * 但可能还没有显式 FINAL_ANSWER Action。
                  */
-                return finishWithFallback(
-                                current,
-                                "Maximum execution steps reached: "
-                                                + maxSteps);
+                current = ensureFinalAnswer(
+                                current);
+
+                return markFinished(
+                                current);
         }
+
+        /*
+         * =========================================================
+         * Skill
+         * =========================================================
+         */
 
         private AgentContext attachSelectedSkill(
                         AgentContext context) {
@@ -407,9 +544,71 @@ public class DefaultAgentRuntime
                         AgentTask task,
                         ToolObservation observation) {
 
+                try {
+
+                        legalEvidenceTrustPolicy.validate(
+                                        observation);
+
+                } catch (RuntimeException exception) {
+
+                        securityAuditLogger.log(
+                                        SecurityAuditEvent.warn(
+                                                        SecurityAuditEventType.EVIDENCE_TRUST_REJECTED,
+                                                        "DefaultAgentRuntime",
+                                                        "Evidence trust boundary rejected tool result",
+                                                        Map.of(
+                                                                        "taskId",
+                                                                        task.getId(),
+                                                                        "toolName",
+                                                                        observation == null
+                                                                                        ? "unknown"
+                                                                                        : observation.getToolName())));
+
+                        return updateTaskStatus(
+                                        context,
+                                        task.getId(),
+                                        AgentTaskStatus.FAILED)
+                                        .appendExecutionLog(
+                                                        "Evidence trust boundary rejected tool result");
+                }
+
                 Objects.requireNonNull(
                                 observation,
                                 "ToolObservation must not be null");
+
+                int observationLength = resolveObservationLength(
+                                observation);
+
+                RuntimeResourceResult resourceDecision = runtimeResourceGuardrailService.evaluate(
+                                RuntimeResourceType.OBSERVATION,
+                                observationLength);
+
+                if (resourceDecision.isDenied()) {
+
+                        auditResourceLimit(
+                                        RuntimeResourceType.OBSERVATION,
+                                        observationLength,
+                                        resourceDecision,
+                                        task.getId());
+
+                        ToolObservation protectedObservation = ToolObservation.failure(
+                                        task.getId(),
+                                        observation.getToolName(),
+                                        resourceDecision.reason(),
+                                        LegalSecurityContext.of(
+                                                        SecuritySource.RUNTIME,
+                                                        SecurityTrustLevel.DERIVED));
+
+                        return updateTaskStatus(
+                                        context,
+                                        task.getId(),
+                                        AgentTaskStatus.FAILED)
+                                        .appendObservation(
+                                                        protectedObservation)
+                                        .appendExecutionLog(
+                                                        "Runtime resource guardrail triggered: "
+                                                                        + resourceDecision.reason());
+                }
 
                 AgentTaskStatus newStatus = observation.isSuccess()
                                 ? AgentTaskStatus.COMPLETED
@@ -434,6 +633,30 @@ public class DefaultAgentRuntime
                         AgentContext context,
                         AgentTask task,
                         String content) {
+
+                int observationLength = lengthOf(
+                                content);
+
+                RuntimeResourceResult resourceDecision = runtimeResourceGuardrailService.evaluate(
+                                RuntimeResourceType.OBSERVATION,
+                                observationLength);
+
+                if (resourceDecision.isDenied()) {
+
+                        auditResourceLimit(
+                                        RuntimeResourceType.OBSERVATION,
+                                        observationLength,
+                                        resourceDecision,
+                                        task.getId());
+
+                        return updateTaskStatus(
+                                        context,
+                                        task.getId(),
+                                        AgentTaskStatus.FAILED)
+                                        .appendExecutionLog(
+                                                        "Runtime resource guardrail triggered: "
+                                                                        + resourceDecision.reason());
+                }
 
                 RuntimeReasonObservation observation = RuntimeReasonObservation.of(
                                 task.getId(),
@@ -594,6 +817,24 @@ public class DefaultAgentRuntime
                                 updated);
         }
 
+        private AgentContext finishWithoutModel(
+                        AgentContext context,
+                        String reason) {
+
+                AgentContext updated = context.appendExecutionLog(
+                                "Runtime resource guardrail triggered: "
+                                                + reason);
+
+                if (!updated.hasFinalAnswer()) {
+
+                        updated = updated.withFinalAnswer(
+                                        "Agent 执行已停止：运行时资源限制已达到。");
+                }
+
+                return markFinished(
+                                updated);
+        }
+
         /*
          * =========================================================
          * Runtime Helpers
@@ -604,6 +845,7 @@ public class DefaultAgentRuntime
                         AgentContext context) {
 
                 if (context.hasFinalAnswer()) {
+
                         return context;
                 }
 
@@ -653,4 +895,180 @@ public class DefaultAgentRuntime
                                 .appendExecutionLog(
                                                 AGENT_FINISHED_LOG);
         }
+
+        private int resolveObservationLength(
+                        ToolObservation observation) {
+
+                if (observation.isSuccess()) {
+
+                        String content = observation.getContent();
+
+                        return content == null
+                                        ? 0
+                                        : content.length();
+                }
+
+                String errorMessage = observation.getErrorMessage();
+
+                return errorMessage == null
+                                ? 0
+                                : errorMessage.length();
+        }
+
+        private int estimateContextLength(
+                        AgentContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
+
+                long length = 0L;
+
+                length += lengthOf(
+                                context.getGoal());
+
+                if (context.getReasonResult() != null) {
+
+                        length += lengthOf(
+                                        context.getReasonResult()
+                                                        .getReasonSummary());
+                }
+
+                for (AgentTask task : context.getAgentPlan()
+                                .getTasks()) {
+
+                        length += lengthOf(
+                                        task.getId());
+
+                        length += lengthOf(
+                                        task.getDescription());
+
+                        if (task.getStatus() != null) {
+
+                                length += task.getStatus()
+                                                .name()
+                                                .length();
+                        }
+                }
+
+                for (ToolObservation observation : context.getObservations()) {
+
+                        length += lengthOf(
+                                        observation.getTaskId());
+
+                        length += lengthOf(
+                                        observation.getToolName());
+
+                        length += resolveObservationLength(
+                                        observation);
+                }
+
+                for (RuntimeReasonObservation observation : context.getRuntimeReasonObservations()) {
+
+                        length += lengthOf(
+                                        observation.getTaskId());
+
+                        length += lengthOf(
+                                        observation.getContent());
+                }
+
+                for (String executionLog : context.getExecutionLogs()) {
+
+                        length += lengthOf(
+                                        executionLog);
+                }
+
+                length += lengthOf(
+                                context.getFinalAnswer());
+
+                if (context.hasSkill()) {
+
+                        SkillContext skillContext = context.getSkillContext()
+                                        .orElseThrow();
+
+                        length += lengthOf(
+                                        skillContext.getSkillId());
+
+                        length += lengthOf(
+                                        skillContext.getSkillName());
+
+                        length += lengthOf(
+                                        skillContext.getDescription());
+
+                        length += lengthOf(
+                                        skillContext.getInstructions());
+
+                        for (String toolName : skillContext.getAllowedTools()) {
+
+                                length += lengthOf(
+                                                toolName);
+                        }
+                }
+
+                return length > Integer.MAX_VALUE
+                                ? Integer.MAX_VALUE
+                                : (int) length;
+        }
+
+        private int lengthOf(
+                        String value) {
+
+                return value == null
+                                ? 0
+                                : value.length();
+        }
+
+        private void auditRuntimeLimit(
+                        RuntimeGuardrailOperation operation,
+                        RuntimeGuardrailResult result) {
+
+                securityAuditLogger.log(
+                                SecurityAuditEvent.warn(
+                                                SecurityAuditEventType.RUNTIME_LIMIT_REACHED,
+                                                "DefaultAgentRuntime",
+                                                result.reason(),
+                                                Map.of(
+                                                                "operation",
+                                                                operation.name(),
+                                                                "policyName",
+                                                                result.policyName())));
+        }
+
+        private void auditResourceLimit(
+                        RuntimeResourceType resourceType,
+                        int actualLength,
+                        RuntimeResourceResult result,
+                        String taskId) {
+
+                Map<String, String> metadata = new java.util.HashMap<>();
+
+                metadata.put(
+                                "resourceType",
+                                resourceType.name());
+
+                metadata.put(
+                                "actualLength",
+                                String.valueOf(
+                                                actualLength));
+
+                metadata.put(
+                                "policyName",
+                                result.policyName());
+
+                if (taskId != null
+                                && !taskId.isBlank()) {
+
+                        metadata.put(
+                                        "taskId",
+                                        taskId);
+                }
+
+                securityAuditLogger.log(
+                                SecurityAuditEvent.warn(
+                                                SecurityAuditEventType.RESOURCE_LIMIT_REACHED,
+                                                "DefaultAgentRuntime",
+                                                result.reason(),
+                                                metadata));
+        }
+
 }

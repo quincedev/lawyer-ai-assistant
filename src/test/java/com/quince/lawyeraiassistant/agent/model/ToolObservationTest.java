@@ -2,6 +2,14 @@ package com.quince.lawyeraiassistant.agent.model;
 
 import org.junit.jupiter.api.Test;
 
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+
+import static com.quince.lawyeraiassistant.security.legal.TestLegalSecurityContexts.mcpResult;
+import static com.quince.lawyeraiassistant.security.legal.TestLegalSecurityContexts.runtimeDerived;
+import static com.quince.lawyeraiassistant.security.legal.TestLegalSecurityContexts.toolResult;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -10,210 +18,334 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ToolObservationTest {
 
-    @Test
-    void shouldCreateSuccessfulObservation() {
+        @Test
+        void shouldCreateSuccessfulObservation() {
 
-        ToolObservation observation = ToolObservation.success(
-                "task-1",
-                "searchLegalKnowledge",
-                "检索到劳动合同法相关规定");
+                ToolObservation observation = ToolObservation.success(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "检索到劳动合同法相关规定",
+                                toolResult());
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        assertEquals(
-                "searchLegalKnowledge",
-                observation.getToolName());
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
 
-        assertTrue(
-                observation.isSuccess());
+                assertTrue(
+                                observation.isSuccess());
 
-        assertFalse(
-                observation.isFailure());
+                assertFalse(
+                                observation.isFailure());
 
-        assertEquals(
-                "检索到劳动合同法相关规定",
-                observation.getContent());
+                assertEquals(
+                                "检索到劳动合同法相关规定",
+                                observation.getContent());
 
-        assertNull(
-                observation.getErrorMessage());
-    }
+                assertNull(
+                                observation.getErrorMessage());
 
-    @Test
-    void shouldCreateFailedObservation() {
+                assertTrue(
+                                observation.hasEvidenceSecurityContext());
+        }
 
-        ToolObservation observation = ToolObservation.failure(
-                "task-1",
-                "searchLegalKnowledge",
-                "VectorStore unavailable");
+        @Test
+        void shouldCreateFailedObservation() {
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                ToolObservation observation = ToolObservation.failure(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "VectorStore unavailable",
+                                toolResult());
 
-        assertEquals(
-                "searchLegalKnowledge",
-                observation.getToolName());
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        assertFalse(
-                observation.isSuccess());
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
 
-        assertTrue(
-                observation.isFailure());
+                assertFalse(
+                                observation.isSuccess());
 
-        assertNull(
-                observation.getContent());
+                assertTrue(
+                                observation.isFailure());
 
-        assertEquals(
-                "VectorStore unavailable",
-                observation.getErrorMessage());
-    }
+                assertNull(
+                                observation.getContent());
 
-    @Test
-    void shouldTrimFields() {
+                assertEquals(
+                                "VectorStore unavailable",
+                                observation.getErrorMessage());
+        }
 
-        ToolObservation observation = ToolObservation.success(
-                "  task-1  ",
-                "  searchLegalKnowledge  ",
-                "  检索成功  ");
+        @Test
+        void shouldTrimFields() {
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                ToolObservation observation = ToolObservation.success(
+                                "  task-1  ",
+                                "  searchLegalKnowledge  ",
+                                "  检索成功  ",
+                                toolResult());
 
-        assertEquals(
-                "searchLegalKnowledge",
-                observation.getToolName());
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        assertEquals(
-                "检索成功",
-                observation.getContent());
-    }
+                assertEquals(
+                                "searchLegalKnowledge",
+                                observation.getToolName());
 
-    @Test
-    void shouldRejectNullTaskId() {
+                assertEquals(
+                                "检索成功",
+                                observation.getContent());
+        }
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> ToolObservation.success(
-                        null,
-                        "searchLegalKnowledge",
-                        "result"));
+        @Test
+        void shouldRejectNullTaskId() {
 
-        assertEquals(
-                "Task id must not be null",
-                exception.getMessage());
-    }
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> ToolObservation.success(
+                                                null,
+                                                "searchLegalKnowledge",
+                                                "result",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectBlankTaskId() {
+                assertEquals(
+                                "Task id must not be null",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.success(
-                        "   ",
-                        "searchLegalKnowledge",
-                        "result"));
+        @Test
+        void shouldRejectBlankTaskId() {
 
-        assertEquals(
-                "Task id must not be blank",
-                exception.getMessage());
-    }
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.success(
+                                                "   ",
+                                                "searchLegalKnowledge",
+                                                "result",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectNullToolName() {
+                assertEquals(
+                                "Task id must not be blank",
+                                exception.getMessage());
+        }
 
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> ToolObservation.success(
-                        "task-1",
-                        null,
-                        "result"));
+        @Test
+        void shouldRejectNullToolName() {
 
-        assertEquals(
-                "Tool name must not be null",
-                exception.getMessage());
-    }
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> ToolObservation.success(
+                                                "task-1",
+                                                null,
+                                                "result",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectBlankToolName() {
+                assertEquals(
+                                "Tool name must not be null",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.success(
-                        "task-1",
-                        "   ",
-                        "result"));
+        @Test
+        void shouldRejectBlankToolName() {
 
-        assertEquals(
-                "Tool name must not be blank",
-                exception.getMessage());
-    }
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.success(
+                                                "task-1",
+                                                "   ",
+                                                "result",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectBlankSuccessfulContent() {
+                assertEquals(
+                                "Tool name must not be blank",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.success(
-                        "task-1",
-                        "searchLegalKnowledge",
-                        "   "));
+        @Test
+        void shouldRejectBlankSuccessfulContent() {
 
-        assertEquals(
-                "Successful observation must contain content",
-                exception.getMessage());
-    }
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.success(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "   ",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectBlankFailureMessage() {
+                assertEquals(
+                                "Successful observation must contain content",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.failure(
-                        "task-1",
-                        "searchLegalKnowledge",
-                        "   "));
+        @Test
+        void shouldRejectBlankFailureMessage() {
 
-        assertEquals(
-                "Failed observation must contain errorMessage",
-                exception.getMessage());
-    }
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.failure(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "   ",
+                                                toolResult()));
 
-    @Test
-    void shouldRejectSuccessfulObservationWithErrorMessage() {
+                assertEquals(
+                                "Failed observation must contain errorMessage",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.builder()
-                        .taskId("task-1")
-                        .toolName("searchLegalKnowledge")
-                        .success(true)
-                        .content("result")
-                        .errorMessage("error")
-                        .build());
+        @Test
+        void shouldRejectNullEvidenceSecurityContextForSuccess() {
 
-        assertEquals(
-                "Successful observation must not contain errorMessage",
-                exception.getMessage());
-    }
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> ToolObservation.success(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "result",
+                                                null));
 
-    @Test
-    void shouldRejectFailedObservationWithContent() {
+                assertEquals(
+                                "evidenceSecurityContext must not be null",
+                                exception.getMessage());
+        }
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> ToolObservation.builder()
-                        .taskId("task-1")
-                        .toolName("searchLegalKnowledge")
-                        .success(false)
-                        .content("result")
-                        .errorMessage("error")
-                        .build());
+        @Test
+        void shouldRejectNullEvidenceSecurityContextForFailure() {
 
-        assertEquals(
-                "Failed observation must not contain content",
-                exception.getMessage());
-    }
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> ToolObservation.failure(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "failed",
+                                                null));
+
+                assertEquals(
+                                "evidenceSecurityContext must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectSuccessfulObservationWithErrorMessage() {
+
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.builder()
+                                                .taskId(
+                                                                "task-1")
+                                                .toolName(
+                                                                "searchLegalKnowledge")
+                                                .success(
+                                                                true)
+                                                .content(
+                                                                "result")
+                                                .errorMessage(
+                                                                "error")
+                                                .evidenceSecurityContext(
+                                                                toolResult())
+                                                .build());
+
+                assertEquals(
+                                "Successful observation must not contain errorMessage",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectFailedObservationWithContent() {
+
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> ToolObservation.builder()
+                                                .taskId(
+                                                                "task-1")
+                                                .toolName(
+                                                                "searchLegalKnowledge")
+                                                .success(
+                                                                false)
+                                                .content(
+                                                                "result")
+                                                .errorMessage(
+                                                                "error")
+                                                .evidenceSecurityContext(
+                                                                toolResult())
+                                                .build());
+
+                assertEquals(
+                                "Failed observation must not contain content",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldCreateToolResultObservation() {
+
+                ToolObservation observation = ToolObservation.success(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "result",
+                                toolResult());
+
+                LegalSecurityContext context = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
+
+                assertEquals(
+                                SecuritySource.TOOL_RESULT,
+                                context.source());
+
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                context.trustLevel());
+        }
+
+        @Test
+        void shouldCreateMcpResultObservation() {
+
+                ToolObservation observation = ToolObservation.success(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "result",
+                                mcpResult());
+
+                LegalSecurityContext context = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
+
+                assertEquals(
+                                SecuritySource.MCP_RESULT,
+                                context.source());
+
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                context.trustLevel());
+        }
+
+        @Test
+        void shouldCreateRuntimeDerivedObservation() {
+
+                ToolObservation observation = ToolObservation.failure(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "Authorization denied",
+                                runtimeDerived());
+
+                LegalSecurityContext context = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
+
+                assertEquals(
+                                SecuritySource.RUNTIME,
+                                context.source());
+
+                assertEquals(
+                                SecurityTrustLevel.DERIVED,
+                                context.trustLevel());
+        }
 }

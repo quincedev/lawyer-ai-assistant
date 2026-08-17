@@ -1,8 +1,8 @@
 package com.quince.lawyeraiassistant.workflow.agent;
 
+import com.quince.lawyeraiassistant.agent.application.AgentApplicationService;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
-import com.quince.lawyeraiassistant.agent.runtime.AgentRuntime;
 import com.quince.lawyeraiassistant.workflow.executor.WorkflowNodeExecutionResult;
 import com.quince.lawyeraiassistant.workflow.executor.WorkflowNodeExecutor;
 import com.quince.lawyeraiassistant.workflow.model.WorkflowContext;
@@ -16,83 +16,80 @@ import java.util.Objects;
  * 在 Workflow 中执行 Agent Node。
  */
 public final class AgentWorkflowNodeExecutor
-        implements WorkflowNodeExecutor {
+                implements WorkflowNodeExecutor {
 
-    private final AgentRuntime agentRuntime;
+        private final AgentApplicationService agentApplicationService;
 
-    public AgentWorkflowNodeExecutor(
-            AgentRuntime agentRuntime) {
+        public AgentWorkflowNodeExecutor(
+                        AgentApplicationService agentApplicationService) {
 
-        this.agentRuntime = Objects.requireNonNull(
-                agentRuntime,
-                "AgentRuntime must not be null");
-    }
-
-    @Override
-    public boolean supports(
-            WorkflowNode node) {
-
-        Objects.requireNonNull(
-                node,
-                "WorkflowNode must not be null");
-
-        return node.getType() == WorkflowNodeType.AGENT;
-    }
-
-    @Override
-    public WorkflowNodeExecutionResult execute(
-            WorkflowNode node,
-            WorkflowContext context) {
-
-        Objects.requireNonNull(
-                node,
-                "WorkflowNode must not be null");
-
-        Objects.requireNonNull(
-                context,
-                "WorkflowContext must not be null");
-
-        String goal = resolveAgentGoal(
-                context);
-
-        AgentContext agentContext = AgentContext.from(
-                goal);
-
-        AgentContext result = agentRuntime.run(
-                agentContext);
-
-        if (result.getStatus() != AgentStatus.FINISHED) {
-
-            return WorkflowNodeExecutionResult.failure(
-                    "Agent runtime did not finish successfully");
+                this.agentApplicationService = Objects.requireNonNull(
+                                agentApplicationService,
+                                "AgentApplicationService must not be null");
         }
 
-        if (result.getFinalAnswer() == null
-                || result.getFinalAnswer().isBlank()) {
+        @Override
+        public boolean supports(
+                        WorkflowNode node) {
 
-            return WorkflowNodeExecutionResult.failure(
-                    "Agent did not produce a final answer");
+                Objects.requireNonNull(
+                                node,
+                                "WorkflowNode must not be null");
+
+                return node.getType() == WorkflowNodeType.AGENT;
         }
 
-        return WorkflowNodeExecutionResult.success(
-                Map.of(
-                        AgentWorkflowVariables.AGENT_FINAL_ANSWER,
-                        result.getFinalAnswer()));
-    }
+        @Override
+        public WorkflowNodeExecutionResult execute(
+                        WorkflowNode node,
+                        WorkflowContext context) {
 
-    private String resolveAgentGoal(
-            WorkflowContext context) {
+                Objects.requireNonNull(
+                                node,
+                                "WorkflowNode must not be null");
 
-        Object value = context.getVariable(
-                AgentWorkflowVariables.AGENT_GOAL);
+                Objects.requireNonNull(
+                                context,
+                                "WorkflowContext must not be null");
 
-        if (!(value instanceof String goal)
-                || goal.isBlank()) {
+                String goal = resolveAgentGoal(
+                                context);
 
-            throw new IllegalStateException(
-                    "Agent goal is missing from WorkflowContext");
+                AgentContext result = agentApplicationService.execute(
+                                goal);
+
+                if (result.getStatus() != AgentStatus.FINISHED) {
+
+                        return WorkflowNodeExecutionResult.failure(
+                                        "Agent runtime did not finish successfully");
+                }
+
+                if (result.getFinalAnswer() == null
+                                || result.getFinalAnswer().isBlank()) {
+
+                        return WorkflowNodeExecutionResult.failure(
+                                        "Agent did not produce a final answer");
+                }
+
+                return WorkflowNodeExecutionResult.success(
+                                Map.of(
+                                                AgentWorkflowVariables.AGENT_FINAL_ANSWER,
+                                                result.getFinalAnswer()));
         }
 
-        return goal.trim();
-    }
+        private String resolveAgentGoal(
+                        WorkflowContext context) {
+
+                Object value = context.getVariable(
+                                AgentWorkflowVariables.AGENT_GOAL);
+
+                if (!(value instanceof String goal)
+                                || goal.isBlank()) {
+
+                        throw new IllegalStateException(
+                                        "Agent goal is missing from WorkflowContext");
+                }
+
+                return goal.trim();
+        }
 }

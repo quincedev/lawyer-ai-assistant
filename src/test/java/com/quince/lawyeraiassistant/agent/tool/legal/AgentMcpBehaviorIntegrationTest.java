@@ -9,6 +9,13 @@ import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.agent.tool.DefaultToolActionExecutor;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityResult;
+import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
+import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +26,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,199 +41,255 @@ import static org.mockito.Mockito.when;
 
 class AgentMcpBehaviorIntegrationTest {
 
-    private ToolCallback mcpToolCallback;
+        private ToolCallback mcpToolCallback;
 
-    private AgentToolRegistry toolRegistry;
+        private AgentToolRegistry toolRegistry;
 
-    private SkillToolScope skillToolScope;
+        private SkillToolScope skillToolScope;
 
-    private DefaultToolActionExecutor toolActionExecutor;
+        private DefaultToolActionExecutor toolActionExecutor;
 
-    private SkillContext legalSkillContext;
+        private AgentExecutionLimits executionLimits;
 
-    @BeforeEach
-    void setUp() {
+        private SkillContext legalSkillContext;
 
-        SyncMcpToolCallbackProvider provider = mock(
-                SyncMcpToolCallbackProvider.class);
+        private SecurityAuditLogger securityAuditLogger;
 
-        mcpToolCallback = mock(
-                ToolCallback.class);
+        @BeforeEach
+        void setUp() {
 
-        ToolDefinition definition = mock(
-                ToolDefinition.class);
+                SyncMcpToolCallbackProvider provider = mock(
+                                SyncMcpToolCallbackProvider.class);
 
-        when(
-                definition.name())
-                .thenReturn(
-                        LegalKnowledgeTool.TOOL_NAME);
+                mcpToolCallback = mock(
+                                ToolCallback.class);
 
-        when(
-                mcpToolCallback.getToolDefinition())
-                .thenReturn(
-                        definition);
+                ToolDefinition definition = mock(
+                                ToolDefinition.class);
 
-        when(
-                provider.getToolCallbacks())
-                .thenReturn(
-                        new ToolCallback[] {
-                                mcpToolCallback
-                        });
+                securityAuditLogger = mock(SecurityAuditLogger.class);
 
-        McpLegalKnowledgeTool mcpTool = new McpLegalKnowledgeTool(
-                provider,
-                new ObjectMapper());
+                when(
+                                definition.name())
+                                .thenReturn(
+                                                LegalKnowledgeTool.TOOL_NAME);
 
-        toolRegistry = new AgentToolRegistry(
-                List.of(
-                        mcpTool));
+                when(
+                                mcpToolCallback.getToolDefinition())
+                                .thenReturn(
+                                                definition);
 
-        skillToolScope = new SkillToolScope();
+                when(
+                                provider.getToolCallbacks())
+                                .thenReturn(
+                                                new ToolCallback[] {
+                                                                mcpToolCallback
+                                                });
 
-        toolActionExecutor = new DefaultToolActionExecutor(
-                toolRegistry);
+                McpToolResultSecurityService resultSecurityService = mock(
+                                McpToolResultSecurityService.class);
 
-        AgentSkill legalResearchSkill = AgentSkill.of(
-                "legal-research",
-                "Legal Research",
-                "用于法律问题研究与法律依据检索",
-                "对需要法律依据支持的判断，应优先检索法律知识库",
-                List.of(
-                        LegalKnowledgeTool.TOOL_NAME),
-                Set.of(
-                        "legal",
-                        "research"));
+                when(
+                                resultSecurityService.evaluate(
+                                                anyString(),
+                                                anyString()))
+                                .thenAnswer(
+                                                invocation -> McpToolResultSecurityResult.allow(
+                                                                invocation.getArgument(0),
+                                                                "testResultSecurity"));
 
-        legalSkillContext = SkillContext.of(
-                legalResearchSkill);
-    }
+                McpLegalKnowledgeTool mcpTool = new McpLegalKnowledgeTool(
+                                provider,
+                                new ObjectMapper(),
+                                resultSecurityService,
+                                securityAuditLogger);
 
-    @Test
-    void shouldExposeMcpToolThroughExistingSkillToolScope() {
+                toolRegistry = new AgentToolRegistry(
+                                List.of(
+                                                mcpTool));
 
-        List<String> availableTools = skillToolScope.filterAllowed(
-                Optional.of(
-                        legalSkillContext),
-                toolRegistry.names());
+                skillToolScope = new SkillToolScope();
 
-        assertEquals(
-                List.of(
-                        LegalKnowledgeTool.TOOL_NAME),
-                availableTools);
+                executionLimits = new AgentExecutionLimits(
+                                10,
+                                8,
+                                2,
+                                3,
+                                Duration.ofSeconds(120),
+                                Duration.ofSeconds(30),
+                                20_000,
+                                60_000);
 
-        assertTrue(
-                skillToolScope.isAllowed(
-                        Optional.of(
-                                legalSkillContext),
-                        LegalKnowledgeTool.TOOL_NAME));
-    }
+                toolActionExecutor = new DefaultToolActionExecutor(
+                                toolRegistry,
+                                executionLimits,
+                                securityAuditLogger);
 
-    @Test
-    void shouldExecuteMcpToolThroughExistingAgentToolPipeline() {
+                AgentSkill legalResearchSkill = AgentSkill.of(
+                                "legal-research",
+                                "Legal Research",
+                                "用于法律问题研究与法律依据检索",
+                                "对需要法律依据支持的判断，应优先检索法律知识库",
+                                List.of(
+                                                LegalKnowledgeTool.TOOL_NAME),
+                                Set.of(
+                                                "legal",
+                                                "research"));
 
-        when(
-                mcpToolCallback.call(
-                        anyString()))
-                .thenReturn(
-                        "《劳动合同法》第八十七条："
-                                + "用人单位违法解除或者终止劳动合同的，"
-                                + "应当依照经济补偿标准的二倍向劳动者支付赔偿金。");
+                legalSkillContext = SkillContext.of(
+                                legalResearchSkill);
+        }
 
-        ToolAction action = ToolAction.of(
-                "task-1",
-                LegalKnowledgeTool.TOOL_NAME,
-                Map.of(
-                        LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT,
-                        "违法解除劳动合同需要承担什么责任"));
+        @Test
+        void shouldExposeMcpToolThroughExistingSkillToolScope() {
 
-        ToolObservation observation = toolActionExecutor.execute(
-                action);
+                List<String> availableTools = skillToolScope.filterAllowed(
+                                Optional.of(
+                                                legalSkillContext),
+                                toolRegistry.names());
 
-        assertTrue(
-                observation.isSuccess());
+                assertEquals(
+                                List.of(
+                                                LegalKnowledgeTool.TOOL_NAME),
+                                availableTools);
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                assertTrue(
+                                skillToolScope.isAllowed(
+                                                Optional.of(
+                                                                legalSkillContext),
+                                                LegalKnowledgeTool.TOOL_NAME));
+        }
 
-        assertEquals(
-                LegalKnowledgeTool.TOOL_NAME,
-                observation.getToolName());
+        @Test
+        void shouldExecuteMcpToolThroughExistingAgentToolPipeline() {
 
-        assertTrue(
-                observation.getContent()
-                        .contains(
-                                "第八十七条"));
+                when(
+                                mcpToolCallback.call(
+                                                anyString()))
+                                .thenReturn(
+                                                "《劳动合同法》第八十七条："
+                                                                + "用人单位违法解除或者终止劳动合同的，"
+                                                                + "应当依照经济补偿标准的二倍向劳动者支付赔偿金。");
 
-        assertTrue(
-                observation.getContent()
-                        .contains(
-                                "二倍"));
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(
+                                                LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT,
+                                                "违法解除劳动合同需要承担什么责任"));
 
-        verify(
-                mcpToolCallback)
-                .call(
-                        anyString());
-    }
+                ToolObservation observation = toolActionExecutor.execute(
+                                action);
 
-    @Test
-    void shouldConvertMcpFailureIntoExistingFailedToolObservation() {
+                assertTrue(
+                                observation.isSuccess());
 
-        when(
-                mcpToolCallback.call(
-                        anyString()))
-                .thenThrow(
-                        new IllegalStateException(
-                                "Legal MCP Server unavailable"));
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
 
-        ToolAction action = ToolAction.of(
-                "task-1",
-                LegalKnowledgeTool.TOOL_NAME,
-                Map.of(
-                        LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT,
-                        "违法解除劳动合同"));
+                assertEquals(
+                                LegalKnowledgeTool.TOOL_NAME,
+                                observation.getToolName());
 
-        ToolObservation observation = toolActionExecutor.execute(
-                action);
+                assertTrue(
+                                observation.getContent()
+                                                .contains(
+                                                                "第八十七条"));
 
-        assertTrue(
-                observation.isFailure());
+                assertTrue(
+                                observation.getContent()
+                                                .contains(
+                                                                "二倍"));
 
-        assertEquals(
-                "task-1",
-                observation.getTaskId());
+                LegalSecurityContext securityContext = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
 
-        assertEquals(
-                LegalKnowledgeTool.TOOL_NAME,
-                observation.getToolName());
+                assertEquals(
+                                SecuritySource.MCP_RESULT,
+                                securityContext.source());
 
-        assertEquals(
-                "Legal MCP Server unavailable",
-                observation.getErrorMessage());
-    }
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                securityContext.trustLevel());
 
-    @Test
-    void shouldKeepMcpImplementationInvisibleToSkillLayer() {
+                verify(
+                                mcpToolCallback)
+                                .call(
+                                                anyString());
+        }
 
-        assertEquals(
-                List.of(
-                        LegalKnowledgeTool.TOOL_NAME),
-                toolRegistry.names());
+        @Test
+        void shouldConvertMcpFailureIntoExistingFailedToolObservation() {
 
-        assertEquals(
-                "searchLegalKnowledge",
-                legalSkillContext
-                        .getAllowedTools()
-                        .getFirst());
+                when(
+                                mcpToolCallback.call(
+                                                anyString()))
+                                .thenThrow(
+                                                new IllegalStateException(
+                                                                "Legal MCP Server unavailable"));
 
-        List<String> availableTools = skillToolScope.filterAllowed(
-                Optional.of(
-                        legalSkillContext),
-                toolRegistry.names());
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(
+                                                LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT,
+                                                "违法解除劳动合同"));
 
-        assertEquals(
-                List.of(
-                        "searchLegalKnowledge"),
-                availableTools);
-    }
+                ToolObservation observation = toolActionExecutor.execute(
+                                action);
+
+                assertTrue(
+                                observation.isFailure());
+
+                assertEquals(
+                                "task-1",
+                                observation.getTaskId());
+
+                assertEquals(
+                                LegalKnowledgeTool.TOOL_NAME,
+                                observation.getToolName());
+
+                assertEquals(
+                                "MCP tool execution failed",
+                                observation.getErrorMessage());
+
+                LegalSecurityContext securityContext = observation
+                                .getEvidenceSecurityContext()
+                                .orElseThrow();
+
+                assertEquals(
+                                SecuritySource.MCP_RESULT,
+                                securityContext.source());
+
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                securityContext.trustLevel());
+        }
+
+        @Test
+        void shouldKeepMcpImplementationInvisibleToSkillLayer() {
+
+                assertEquals(
+                                List.of(
+                                                LegalKnowledgeTool.TOOL_NAME),
+                                toolRegistry.names());
+
+                assertEquals(
+                                "searchLegalKnowledge",
+                                legalSkillContext
+                                                .getAllowedTools()
+                                                .getFirst());
+
+                List<String> availableTools = skillToolScope.filterAllowed(
+                                Optional.of(
+                                                legalSkillContext),
+                                toolRegistry.names());
+
+                assertEquals(
+                                List.of(
+                                                "searchLegalKnowledge"),
+                                availableTools);
+        }
 }

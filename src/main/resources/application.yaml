@@ -114,17 +114,59 @@ app:
 logging:
   level:
     com.quince.lawyeraiassistant.advisor.LoggingAdvisorV2: DEBUG
+    SECURITY_AUDIT: INFO
 
 # =============================================================
 # Agent Runtime
 # =============================================================
 agent:
   runtime:
-    # 单次 Agent Runtime 最大 Action 数量
+    # 单次 Agent Execution 最大 Task Execution Cycle 数量
     max-steps: 10
 
-    # 单个 Task 最大 Retry 次数
-    max-retries-per-task: 2
+    # 单次 Agent Execution 最大 Tool Action 尝试次数
+    max-tool-calls: 8
 
-    # 单次 Runtime 最大 Replan 次数
+    # 单次 Agent Execution 最大 Retry 总次数
+    max-retries: 3
+
+    # 单次 Agent Execution 最大 Replan 次数
     max-replans: 2
+
+    # 整个 Agent Execution 最大执行时间
+    max-execution-time: 120s
+
+    # 单次 Tool 最大执行时间
+    max-tool-execution-time: 30s
+
+    # 单个 Observation 最大字符数
+    max-observation-length: 20000
+
+    # Agent 上下文最大字符数
+    max-context-length: 60000
+
+security:
+  guardrail:
+    input:
+      max-length: 10000
+
+      prompt-injection:
+        block-threshold: 2
+
+    output:
+      max-length: 20000
+
+# =============================================================
+# Actuator
+# =============================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - metrics
+
+  endpoint:
+    health:
+      show-details: never

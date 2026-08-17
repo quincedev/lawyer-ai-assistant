@@ -2,6 +2,10 @@ package com.quince.lawyeraiassistant.agent.model;
 
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -96,6 +100,8 @@ public final class AgentContext {
 
         private final SkillContext skillContext;
 
+        private final LegalSecurityContext legalSecurityContext;
+
         @Builder(toBuilder = true)
         private AgentContext(
                         String goal,
@@ -106,7 +112,8 @@ public final class AgentContext {
                         List<String> executionLogs,
                         String finalAnswer,
                         List<RuntimeReasonObservation> runtimeReasonObservations,
-                        SkillContext skillContext) {
+                        SkillContext skillContext,
+                        LegalSecurityContext legalSecurityContext) {
 
                 this.goal = normalizeGoal(
                                 goal);
@@ -132,6 +139,8 @@ public final class AgentContext {
                 this.runtimeReasonObservations = normalizeRuntimeReasonObservations(runtimeReasonObservations);
 
                 this.skillContext = skillContext;
+
+                this.legalSecurityContext = legalSecurityContext;
         }
 
         /**
@@ -156,7 +165,12 @@ public final class AgentContext {
                         String goal) {
 
                 return AgentContext.builder()
-                                .goal(goal)
+                                .goal(
+                                                goal)
+                                .legalSecurityContext(
+                                                LegalSecurityContext.of(
+                                                                SecuritySource.USER_INPUT,
+                                                                SecurityTrustLevel.UNTRUSTED))
                                 .build();
         }
 
@@ -473,5 +487,29 @@ public final class AgentContext {
 
                 return List.copyOf(
                                 observations);
+        }
+
+        public Optional<LegalSecurityContext> getLegalSecurityContext() {
+
+                return Optional.ofNullable(
+                                legalSecurityContext);
+        }
+
+        public boolean hasLegalSecurityContext() {
+
+                return legalSecurityContext != null;
+        }
+
+        public AgentContext withLegalSecurityContext(
+                        LegalSecurityContext legalSecurityContext) {
+
+                Objects.requireNonNull(
+                                legalSecurityContext,
+                                "LegalSecurityContext must not be null");
+
+                return toBuilder()
+                                .legalSecurityContext(
+                                                legalSecurityContext)
+                                .build();
         }
 }

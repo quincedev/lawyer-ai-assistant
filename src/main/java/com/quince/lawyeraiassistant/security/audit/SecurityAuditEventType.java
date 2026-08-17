@@ -1,0 +1,22 @@
+package com.quince.lawyeraiassistant.security.audit;
+
+public enum SecurityAuditEventType {
+
+    INPUT_GUARDRAIL_BLOCKED,
+
+    OUTPUT_GUARDRAIL_BLOCKED,
+
+    TOOL_AUTHORIZATION_DENIED,
+
+    MCP_TOOL_SECURITY_DENIED,
+
+    MCP_RESULT_SECURITY_REJECTED,
+
+    EVIDENCE_TRUST_REJECTED,
+
+    RUNTIME_LIMIT_REACHED,
+
+    RESOURCE_LIMIT_REACHED,
+
+    TOOL_EXECUTION_TIMEOUT
+}

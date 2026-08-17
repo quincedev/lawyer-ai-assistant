@@ -4,6 +4,8 @@ import com.quince.lawyeraiassistant.agent.tool.AgentTool;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
+import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,190 +30,228 @@ import static org.mockito.Mockito.when;
 
 class LegalToolModeRegistrationTest {
 
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(
-                    ToolModeTestConfiguration.class);
+        /*
+         * ApplicationContextRunner 创建的是一个裁剪后的测试 Spring Context。
+         *
+         * McpLegalKnowledgeTool 现在新增了：
+         *
+         * SecurityAuditLogger
+         *
+         * 构造器依赖。
+         *
+         * 这个 UT 只验证 Local / MCP Tool 的条件注册，
+         * 并不测试 SecurityAuditLogger 本身，
+         * 所以这里直接注册一个 mock Bean。
+         */
+        private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+                        .withBean(
+                                        SecurityAuditLogger.class,
+                                        () -> mock(
+                                                        SecurityAuditLogger.class));
 
-    @Test
-    void shouldRegisterOnlyLocalToolInLocalMode() {
+        @Test
+        void shouldRegisterOnlyLocalToolInLocalMode() {
 
-        contextRunner
-                .withPropertyValues(
-                        "app.agent.legal-tool-mode=local")
-                .run(
-                        context -> {
+                contextRunner
+                                .withUserConfiguration(
+                                                ToolModeTestConfiguration.class)
+                                .withPropertyValues(
+                                                "app.agent.legal-tool-mode=local")
+                                .run(
+                                                context -> {
 
-                            Map<String, AgentTool> tools = context.getBeansOfType(
-                                    AgentTool.class);
+                                                        Map<String, AgentTool> tools = context.getBeansOfType(
+                                                                        AgentTool.class);
 
-                            assertEquals(
-                                    1,
-                                    tools.size());
+                                                        assertEquals(
+                                                                        1,
+                                                                        tools.size());
 
-                            assertEquals(
-                                    1,
-                                    context.getBeansOfType(
-                                                    LegalKnowledgeTool.class)
-                                            .size());
+                                                        assertEquals(
+                                                                        1,
+                                                                        context.getBeansOfType(
+                                                                                        LegalKnowledgeTool.class)
+                                                                                        .size());
 
-                            assertTrue(
-                                    context.getBeansOfType(
-                                                    McpLegalKnowledgeTool.class)
-                                            .isEmpty());
+                                                        assertTrue(
+                                                                        context.getBeansOfType(
+                                                                                        McpLegalKnowledgeTool.class)
+                                                                                        .isEmpty());
 
-                            AgentToolRegistry registry = context.getBean(
-                                    AgentToolRegistry.class);
+                                                        AgentToolRegistry registry = context.getBean(
+                                                                        AgentToolRegistry.class);
 
-                            assertEquals(
-                                    1,
-                                    registry.size());
+                                                        assertEquals(
+                                                                        1,
+                                                                        registry.size());
 
-                            assertEquals(
-                                    LegalKnowledgeTool.TOOL_NAME,
-                                    registry.names()
-                                            .getFirst());
+                                                        assertEquals(
+                                                                        LegalKnowledgeTool.TOOL_NAME,
+                                                                        registry.names()
+                                                                                        .getFirst());
 
-                            assertTrue(
-                                    registry.get(
-                                            LegalKnowledgeTool.TOOL_NAME) instanceof LegalKnowledgeTool);
-                        });
-    }
-
-    @Test
-    void shouldRegisterOnlyMcpToolInMcpMode() {
-
-        contextRunner
-                .withPropertyValues(
-                        "app.agent.legal-tool-mode=mcp")
-                .run(
-                        context -> {
-
-                            Map<String, AgentTool> tools = context.getBeansOfType(
-                                    AgentTool.class);
-
-                            assertEquals(
-                                    1,
-                                    tools.size());
-
-                            assertTrue(
-                                    context.getBeansOfType(
-                                                    LegalKnowledgeTool.class)
-                                            .isEmpty());
-
-                            assertEquals(
-                                    1,
-                                    context.getBeansOfType(
-                                                    McpLegalKnowledgeTool.class)
-                                            .size());
-
-                            AgentToolRegistry registry = context.getBean(
-                                    AgentToolRegistry.class);
-
-                            assertEquals(
-                                    1,
-                                    registry.size());
-
-                            assertEquals(
-                                    LegalKnowledgeTool.TOOL_NAME,
-                                    registry.names()
-                                            .getFirst());
-
-                            assertTrue(
-                                    registry.get(
-                                            LegalKnowledgeTool.TOOL_NAME) instanceof McpLegalKnowledgeTool);
-                        });
-    }
-
-    @Test
-    void shouldUseLocalModeWhenPropertyIsMissing() {
-
-        contextRunner.run(
-                context -> {
-
-                    Map<String, AgentTool> tools = context.getBeansOfType(
-                            AgentTool.class);
-
-                    assertEquals(
-                            1,
-                            tools.size());
-
-                    assertEquals(
-                            1,
-                            context.getBeansOfType(
-                                            LegalKnowledgeTool.class)
-                                    .size());
-
-                    assertTrue(
-                            context.getBeansOfType(
-                                            McpLegalKnowledgeTool.class)
-                                    .isEmpty());
-
-                    AgentToolRegistry registry = context.getBean(
-                            AgentToolRegistry.class);
-
-                    assertTrue(
-                            registry.get(
-                                    LegalKnowledgeTool.TOOL_NAME) instanceof LegalKnowledgeTool);
-                });
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @Import({
-            LegalKnowledgeTool.class,
-            McpLegalKnowledgeTool.class,
-            AgentToolRegistry.class
-    })
-    static class ToolModeTestConfiguration {
-
-        @Bean
-        RetrievalOrchestrator retrievalOrchestrator() {
-
-            return mock(
-                    RetrievalOrchestrator.class);
+                                                        assertTrue(
+                                                                        registry.get(
+                                                                                        LegalKnowledgeTool.TOOL_NAME) instanceof LegalKnowledgeTool);
+                                                });
         }
 
-        @Bean
-        LegalRetrievalResultFormatter resultFormatter() {
+        @Test
+        void shouldRegisterOnlyMcpToolInMcpMode() {
 
-            return new LegalRetrievalResultFormatter();
+                contextRunner
+                                .withUserConfiguration(
+                                                ToolModeTestConfiguration.class)
+                                .withPropertyValues(
+                                                "app.agent.legal-tool-mode=mcp")
+                                .run(
+                                                context -> {
+
+                                                        Map<String, AgentTool> tools = context.getBeansOfType(
+                                                                        AgentTool.class);
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        tools.size());
+
+                                                        assertTrue(
+                                                                        context.getBeansOfType(
+                                                                                        LegalKnowledgeTool.class)
+                                                                                        .isEmpty());
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        context.getBeansOfType(
+                                                                                        McpLegalKnowledgeTool.class)
+                                                                                        .size());
+
+                                                        AgentToolRegistry registry = context.getBean(
+                                                                        AgentToolRegistry.class);
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        registry.size());
+
+                                                        assertEquals(
+                                                                        LegalKnowledgeTool.TOOL_NAME,
+                                                                        registry.names()
+                                                                                        .getFirst());
+
+                                                        assertTrue(
+                                                                        registry.get(
+                                                                                        LegalKnowledgeTool.TOOL_NAME) instanceof McpLegalKnowledgeTool);
+                                                });
         }
 
-        @Bean
-        ObjectMapper objectMapper() {
+        @Test
+        void shouldUseLocalModeWhenPropertyIsMissing() {
 
-            return new ObjectMapper();
+                contextRunner
+                                .withUserConfiguration(
+                                                ToolModeTestConfiguration.class)
+                                .run(
+                                                context -> {
+
+                                                        Map<String, AgentTool> tools = context.getBeansOfType(
+                                                                        AgentTool.class);
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        tools.size());
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        context.getBeansOfType(
+                                                                                        LegalKnowledgeTool.class)
+                                                                                        .size());
+
+                                                        assertTrue(
+                                                                        context.getBeansOfType(
+                                                                                        McpLegalKnowledgeTool.class)
+                                                                                        .isEmpty());
+
+                                                        AgentToolRegistry registry = context.getBean(
+                                                                        AgentToolRegistry.class);
+
+                                                        assertEquals(
+                                                                        1,
+                                                                        registry.size());
+
+                                                        assertEquals(
+                                                                        LegalKnowledgeTool.TOOL_NAME,
+                                                                        registry.names()
+                                                                                        .getFirst());
+
+                                                        assertTrue(
+                                                                        registry.get(
+                                                                                        LegalKnowledgeTool.TOOL_NAME) instanceof LegalKnowledgeTool);
+                                                });
         }
 
-        @Bean
-        SyncMcpToolCallbackProvider toolCallbackProvider() {
+        @Configuration(proxyBeanMethods = false)
+        @Import({
+                        LegalKnowledgeTool.class,
+                        McpLegalKnowledgeTool.class,
+                        AgentToolRegistry.class
+        })
+        static class ToolModeTestConfiguration {
 
-            SyncMcpToolCallbackProvider provider = mock(
-                    SyncMcpToolCallbackProvider.class);
+                @Bean
+                RetrievalOrchestrator retrievalOrchestrator() {
 
-            ToolCallback callback = mock(
-                    ToolCallback.class);
+                        return mock(
+                                        RetrievalOrchestrator.class);
+                }
 
-            ToolDefinition definition = mock(
-                    ToolDefinition.class);
+                @Bean
+                LegalRetrievalResultFormatter resultFormatter() {
 
-            when(
-                    definition.name())
-                    .thenReturn(
-                            LegalKnowledgeTool.TOOL_NAME);
+                        return new LegalRetrievalResultFormatter();
+                }
 
-            when(
-                    callback.getToolDefinition())
-                    .thenReturn(
-                            definition);
+                @Bean
+                ObjectMapper objectMapper() {
 
-            when(
-                    provider.getToolCallbacks())
-                    .thenReturn(
-                            new ToolCallback[] {
-                                    callback
-                            });
+                        return new ObjectMapper();
+                }
 
-            return provider;
+                @Bean
+                McpToolResultSecurityService mcpToolResultSecurityService() {
+
+                        return mock(
+                                        McpToolResultSecurityService.class);
+                }
+
+                @Bean
+                SyncMcpToolCallbackProvider toolCallbackProvider() {
+
+                        SyncMcpToolCallbackProvider provider = mock(
+                                        SyncMcpToolCallbackProvider.class);
+
+                        ToolCallback callback = mock(
+                                        ToolCallback.class);
+
+                        ToolDefinition definition = mock(
+                                        ToolDefinition.class);
+
+                        when(
+                                        definition.name())
+                                        .thenReturn(
+                                                        LegalKnowledgeTool.TOOL_NAME);
+
+                        when(
+                                        callback.getToolDefinition())
+                                        .thenReturn(
+                                                        definition);
+
+                        when(
+                                        provider.getToolCallbacks())
+                                        .thenReturn(
+                                                        new ToolCallback[] {
+                                                                        callback
+                                                        });
+
+                        return provider;
+                }
         }
-    }
 }

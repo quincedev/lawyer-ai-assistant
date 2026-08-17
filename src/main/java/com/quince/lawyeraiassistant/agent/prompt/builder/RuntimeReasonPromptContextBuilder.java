@@ -3,8 +3,9 @@ package com.quince.lawyeraiassistant.agent.prompt.builder;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
-import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.prompt.model.RuntimeReasonPromptContext;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
+
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
@@ -16,165 +17,144 @@ import java.util.stream.Collectors;
 @Component
 public class RuntimeReasonPromptContextBuilder {
 
-    public RuntimeReasonPromptContext build(
-            AgentContext context,
-            AgentTask task) {
+        private final LegalEvidencePromptFormatter evidencePromptFormatter;
 
-        Objects.requireNonNull(
-                context,
-                "AgentContext must not be null");
+        public RuntimeReasonPromptContextBuilder(
+                        LegalEvidencePromptFormatter evidencePromptFormatter) {
 
-        Objects.requireNonNull(
-                task,
-                "AgentTask must not be null");
-
-        validateTaskBelongsToPlan(
-                context,
-                task);
-
-        return new RuntimeReasonPromptContext(
-                context.getGoal(),
-                formatTask(
-                        task),
-                formatPlan(
-                        context),
-                formatObservations(
-                        context));
-    }
-
-    private String formatTask(
-            AgentTask task) {
-
-        return "%s | %s | %s".formatted(
-                task.getId(),
-                task.getStatus(),
-                task.getDescription());
-    }
-
-    private String formatPlan(
-            AgentContext context) {
-
-        if (context.getAgentPlan() == null
-                || context.getAgentPlan()
-                        .getTasks()
-                        .isEmpty()) {
-
-            return null;
+                this.evidencePromptFormatter = Objects.requireNonNull(
+                                evidencePromptFormatter,
+                                "LegalEvidencePromptFormatter must not be null");
         }
 
-        return context.getAgentPlan()
-                .getTasks()
-                .stream()
-                .map(
-                        this::formatTask)
-                .collect(
-                        Collectors.joining(
-                                "\n"));
-    }
+        public RuntimeReasonPromptContext build(
+                        AgentContext context,
+                        AgentTask task) {
 
-    private String formatObservations(
-            AgentContext context) {
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
 
-        String toolObservations = context.getObservations()
-                .stream()
-                .map(
-                        this::formatObservation)
-                .collect(
-                        Collectors.joining(
-                                "\n\n---\n\n"));
+                Objects.requireNonNull(
+                                task,
+                                "AgentTask must not be null");
 
-        String runtimeReasonObservations = context.getRuntimeReasonObservations()
-                .stream()
-                .map(
-                        this::formatRuntimeReasonObservation)
-                .collect(
-                        Collectors.joining(
-                                "\n\n---\n\n"));
+                validateTaskBelongsToPlan(
+                                context,
+                                task);
 
-        if (toolObservations.isBlank()
-                && runtimeReasonObservations.isBlank()) {
-
-            return null;
+                return new RuntimeReasonPromptContext(
+                                context.getGoal(),
+                                formatTask(
+                                                task),
+                                formatPlan(
+                                                context),
+                                formatObservations(
+                                                context));
         }
 
-        if (toolObservations.isBlank()) {
-            return runtimeReasonObservations;
+        private String formatTask(
+                        AgentTask task) {
+
+                return "%s | %s | %s".formatted(
+                                task.getId(),
+                                task.getStatus(),
+                                task.getDescription());
         }
 
-        if (runtimeReasonObservations.isBlank()) {
-            return toolObservations;
+        private String formatPlan(
+                        AgentContext context) {
+
+                if (context.getAgentPlan() == null
+                                || context.getAgentPlan()
+                                                .getTasks()
+                                                .isEmpty()) {
+
+                        return null;
+                }
+
+                return context.getAgentPlan()
+                                .getTasks()
+                                .stream()
+                                .map(
+                                                this::formatTask)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n"));
         }
 
-        return toolObservations
-                + "\n\n---\n\n"
-                + runtimeReasonObservations;
-    }
+        private String formatObservations(
+                        AgentContext context) {
 
-    private String formatRuntimeReasonObservation(
-            RuntimeReasonObservation observation) {
+                String toolObservations = context.getObservations()
+                                .stream()
+                                .map(
+                                                evidencePromptFormatter::format)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n\n---\n\n"));
 
-        return """
-                Type: REASON
-                Task: %s
-                Result:
-                %s
-                """.formatted(
-                observation.getTaskId(),
-                observation.getContent())
-                .trim();
-    }
+                String runtimeReasonObservations = context.getRuntimeReasonObservations()
+                                .stream()
+                                .map(
+                                                this::formatRuntimeReasonObservation)
+                                .collect(
+                                                Collectors.joining(
+                                                                "\n\n---\n\n"));
 
-    private String formatObservation(
-            ToolObservation observation) {
+                if (toolObservations.isBlank()
+                                && runtimeReasonObservations.isBlank()) {
 
-        if (observation.isFailure()) {
+                        return null;
+                }
 
-            return """
-                    Task: %s
-                    Tool: %s
-                    Status: FAILED
-                    Error:
-                    %s
-                    """.formatted(
-                    observation.getTaskId(),
-                    observation.getToolName(),
-                    observation.getErrorMessage())
-                    .trim();
+                if (toolObservations.isBlank()) {
+                        return runtimeReasonObservations;
+                }
+
+                if (runtimeReasonObservations.isBlank()) {
+                        return toolObservations;
+                }
+
+                return toolObservations
+                                + "\n\n---\n\n"
+                                + runtimeReasonObservations;
         }
 
-        return """
-                Task: %s
-                Tool: %s
-                Status: SUCCESS
-                Result:
-                %s
-                """.formatted(
-                observation.getTaskId(),
-                observation.getToolName(),
-                observation.getContent())
-                .trim();
-    }
+        private String formatRuntimeReasonObservation(
+                        RuntimeReasonObservation observation) {
 
-    private void validateTaskBelongsToPlan(
-            AgentContext context,
-            AgentTask task) {
-
-        if (context.getAgentPlan() == null) {
-            return;
+                return """
+                                Type: REASON
+                                Task: %s
+                                Result:
+                                %s
+                                """.formatted(
+                                observation.getTaskId(),
+                                observation.getContent())
+                                .trim();
         }
 
-        boolean exists = context.getAgentPlan()
-                .getTasks()
-                .stream()
-                .anyMatch(
-                        candidate -> candidate.getId()
-                                .equals(
-                                        task.getId()));
+        private void validateTaskBelongsToPlan(
+                        AgentContext context,
+                        AgentTask task) {
 
-        if (!exists) {
+                if (context.getAgentPlan() == null) {
+                        return;
+                }
 
-            throw new IllegalArgumentException(
-                    "AgentTask must belong to current AgentPlan");
+                boolean exists = context.getAgentPlan()
+                                .getTasks()
+                                .stream()
+                                .anyMatch(
+                                                candidate -> candidate.getId()
+                                                                .equals(
+                                                                                task.getId()));
+
+                if (!exists) {
+
+                        throw new IllegalArgumentException(
+                                        "AgentTask must belong to current AgentPlan");
+                }
         }
-    }
 }

@@ -1,94 +1,211 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
 	<modelVersion>4.0.0</modelVersion>
+
+	<!-- ===================================================== -->
+	<!-- Parent                                                -->
+	<!-- ===================================================== -->
+
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>4.0.7</version>
-		<relativePath /> <!-- lookup parent from repository -->
+		<relativePath />
 	</parent>
+
+	<!-- ===================================================== -->
+	<!-- Project                                               -->
+	<!-- ===================================================== -->
+
 	<groupId>com.quince</groupId>
 	<artifactId>lawyer-ai-assistant</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+
 	<name />
 	<description />
 	<url />
+
 	<licenses>
 		<license />
 	</licenses>
+
 	<developers>
 		<developer />
 	</developers>
+
 	<scm>
 		<connection />
 		<developerConnection />
 		<tag />
 		<url />
 	</scm>
+
+	<!-- ===================================================== -->
+	<!-- Properties                                            -->
+	<!-- ===================================================== -->
+
 	<properties>
+
 		<java.version>21</java.version>
+
 		<spring-ai.version>2.0.0</spring-ai.version>
+
+		<!--
+			JUnit 5 Test Groups / Tags
+
+			默认保持为空：
+			    mvn test
+			运行全部测试。
+
+			security profile 会覆盖为：
+			    security
+
+			从而：
+			    mvn test -Psecurity
+			只运行 @Tag("security") / @SecurityTest。
+		-->
+		<test.groups></test.groups>
+
 	</properties>
+
+	<!-- ===================================================== -->
+	<!-- Dependencies                                          -->
+	<!-- ===================================================== -->
+
 	<dependencies>
+
+		<!-- ================================================= -->
+		<!-- Spring Web MVC                                    -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
-		<!-- MCP Server：通过 WebMVC 暴露法律能力 -->
+
+		<!-- ================================================= -->
+		<!-- MCP Server                                        -->
+		<!--                                                   -->
+		<!-- 通过 WebMVC 暴露法律能力                          -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
 		</dependency>
-		<!-- MCP Client：仅用于当前 MCP Integration / 后续 Agent MCP 接入 -->
+
+		<!-- ================================================= -->
+		<!-- MCP Client                                        -->
+		<!--                                                   -->
+		<!-- 用于 MCP Integration / Agent MCP 接入             -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-mcp-client</artifactId>
 		</dependency>
+
+		<!-- ================================================= -->
+		<!-- Spring AI RAG                                     -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-rag</artifactId>
 		</dependency>
-		<!-- Ollama：负责本地 Embedding -->
+
+		<!-- ================================================= -->
+		<!-- Ollama                                            -->
+		<!--                                                   -->
+		<!-- 负责本地 Embedding                                -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-ollama</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
-			<scope>test</scope>
-		</dependency>
 
-		<!-- DeepSeek：负责聊天和内容生成 -->
+		<!-- ================================================= -->
+		<!-- DeepSeek                                          -->
+		<!--                                                   -->
+		<!-- 负责 Chat / Planning / Reasoning / Generation     -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-deepseek</artifactId>
 		</dependency>
+
+		<!-- ================================================= -->
+		<!-- Validation                                        -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
+
+		<!-- ================================================= -->
+		<!-- PDF Document Reader                               -->
+		<!-- ================================================= -->
 
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-pdf-document-reader</artifactId>
 		</dependency>
 
+		<!-- ================================================= -->
+		<!-- Vector Store                                      -->
+		<!-- ================================================= -->
+
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-vector-store</artifactId>
 		</dependency>
+
+		<!-- ================================================= -->
+		<!-- Lombok                                            -->
+		<!-- ================================================= -->
+
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+
+		<!-- ================================================= -->
+		<!-- Test                                              -->
+		<!-- ================================================= -->
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- ========================================================= -->
+		<!-- Actuator / Micrometer                                     -->
+		<!-- Security Metrics & Runtime Observability                  -->
+		<!-- ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
 	</dependencies>
 
+	<!-- ===================================================== -->
+	<!-- Dependency Management                                 -->
+	<!-- ===================================================== -->
+
 	<dependencyManagement>
+
 		<dependencies>
+
 			<dependency>
 				<groupId>org.springframework.ai</groupId>
 				<artifactId>spring-ai-bom</artifactId>
@@ -96,60 +213,181 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+
 		</dependencies>
+
 	</dependencyManagement>
 
+	<!-- ===================================================== -->
+	<!-- Build                                                 -->
+	<!-- ===================================================== -->
+
 	<build>
+
 		<plugins>
+
+			<!-- ================================================= -->
+			<!-- Spring Boot Maven Plugin                          -->
+			<!-- ================================================= -->
+
 			<plugin>
+
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+
 				<configuration>
+
 					<excludes>
+
 						<exclude>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 						</exclude>
+
 					</excludes>
+
 				</configuration>
+
 			</plugin>
+
+			<!-- ================================================= -->
+			<!-- Maven Compiler                                    -->
+			<!-- ================================================= -->
+
 			<plugin>
+
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+
 				<executions>
+
+					<!-- ========================================= -->
+					<!-- Main Source Compilation                   -->
+					<!-- ========================================= -->
+
 					<execution>
+
 						<id>default-compile</id>
+
 						<phase>compile</phase>
+
 						<goals>
 							<goal>compile</goal>
 						</goals>
+
 						<configuration>
+
 							<annotationProcessorPaths>
+
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
 								</path>
+
 							</annotationProcessorPaths>
+
 						</configuration>
+
 					</execution>
+
+					<!-- ========================================= -->
+					<!-- Test Source Compilation                   -->
+					<!-- ========================================= -->
+
 					<execution>
+
 						<id>default-testCompile</id>
+
 						<phase>test-compile</phase>
+
 						<goals>
 							<goal>testCompile</goal>
 						</goals>
+
 						<configuration>
+
 							<annotationProcessorPaths>
+
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
 								</path>
+
 							</annotationProcessorPaths>
+
 						</configuration>
+
 					</execution>
+
 				</executions>
+
 			</plugin>
+
+			<!-- ================================================= -->
+			<!-- Maven Surefire                                    -->
+			<!--                                                   -->
+			<!-- JUnit 5 Test Tag / Group Filtering                -->
+			<!--                                                   -->
+			<!-- Default:                                          -->
+			<!--     test.groups = empty                           -->
+			<!--     -> run all tests                              -->
+			<!--                                                   -->
+			<!-- Security Profile:                                 -->
+			<!--     test.groups = security                        -->
+			<!--     -> only run security tagged tests             -->
+			<!-- ================================================= -->
+
+			<plugin>
+
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+
+				<configuration>
+
+					<groups>${test.groups}</groups>
+
+				</configuration>
+
+			</plugin>
+
 		</plugins>
+
 	</build>
+
+	<!-- ===================================================== -->
+	<!-- Maven Profiles                                        -->
+	<!-- ===================================================== -->
+
+	<profiles>
+
+		<!-- ================================================= -->
+		<!-- Agent Security Regression                        -->
+		<!--                                                 -->
+		<!-- Usage:                                          -->
+		<!--                                                 -->
+		<!--     mvn clean test -Psecurity                   -->
+		<!--                                                 -->
+		<!-- Runs tests marked with:                         -->
+		<!--                                                 -->
+		<!--     @Tag("security")                            -->
+		<!--                                                 -->
+		<!-- or our composed annotation:                    -->
+		<!--                                                 -->
+		<!--     @SecurityTest                               -->
+		<!-- ================================================= -->
+
+		<profile>
+
+			<id>security</id>
+
+			<properties>
+
+				<test.groups>security</test.groups>
+
+			</properties>
+
+		</profile>
+
+	</profiles>
 
 </project>

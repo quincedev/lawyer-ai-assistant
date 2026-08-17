@@ -6,6 +6,11 @@ import lombok.Getter;
 import lombok.ToString;
 
 import java.util.Objects;
+import java.util.Optional;
+
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
 
 /**
  * Agent Runtime 中的一次 Tool 执行观察结果。
@@ -26,182 +31,237 @@ import java.util.Objects;
 @EqualsAndHashCode
 public final class ToolObservation {
 
-    /**
-     * 本次 Tool 执行对应的 AgentTask ID。
-     */
-    private final String taskId;
+        /**
+         * 本次 Tool 执行对应的 AgentTask ID。
+         */
+        private final String taskId;
 
-    /**
-     * 本次执行使用的 Tool 名称。
-     */
-    private final String toolName;
+        /**
+         * 本次执行使用的 Tool 名称。
+         */
+        private final String toolName;
 
-    /**
-     * Tool 是否执行成功。
-     */
-    private final boolean success;
+        /**
+         * Tool 是否执行成功。
+         */
+        private final boolean success;
 
-    /**
-     * Tool 成功执行后的结果内容。
-     *
-     * <p>
-     * 失败 Observation 中允许为 null。
-     * </p>
-     */
-    private final String content;
+        /**
+         * Tool 成功执行后的结果内容。
+         *
+         * <p>
+         * 失败 Observation 中允许为 null。
+         * </p>
+         */
+        private final String content;
 
-    /**
-     * Tool 执行失败时的错误信息。
-     *
-     * <p>
-     * 成功 Observation 中允许为 null。
-     * </p>
-     */
-    private final String errorMessage;
+        /**
+         * Tool 执行失败时的错误信息。
+         *
+         * <p>
+         * 成功 Observation 中允许为 null。
+         * </p>
+         */
+        private final String errorMessage;
 
-    @Builder(toBuilder = true)
-    private ToolObservation(
-            String taskId,
-            String toolName,
-            boolean success,
-            String content,
-            String errorMessage) {
+        private final LegalSecurityContext evidenceSecurityContext;
 
-        this.taskId = normalizeRequiredText(
-                taskId,
-                "Task id must not be null",
-                "Task id must not be blank");
+        @Builder(toBuilder = true)
+        private ToolObservation(
+                        String taskId,
+                        String toolName,
+                        boolean success,
+                        String content,
+                        String errorMessage,
+                        LegalSecurityContext evidenceSecurityContext) {
 
-        this.toolName = normalizeRequiredText(
-                toolName,
-                "Tool name must not be null",
-                "Tool name must not be blank");
+                this.taskId = normalizeRequiredText(
+                                taskId,
+                                "Task id must not be null",
+                                "Task id must not be blank");
 
-        this.success = success;
+                this.toolName = normalizeRequiredText(
+                                toolName,
+                                "Tool name must not be null",
+                                "Tool name must not be blank");
 
-        this.content = normalizeOptionalText(
-                content);
+                this.success = success;
 
-        this.errorMessage = normalizeOptionalText(
-                errorMessage);
+                this.content = normalizeOptionalText(
+                                content);
 
-        validateState();
-    }
+                this.errorMessage = normalizeOptionalText(
+                                errorMessage);
 
-    /**
-     * 创建成功 Observation。
-     *
-     * @param taskId   对应任务 ID
-     * @param toolName Tool 名称
-     * @param content  Tool 执行结果
-     * @return 成功 Observation
-     */
-    public static ToolObservation success(
-            String taskId,
-            String toolName,
-            String content) {
+                this.evidenceSecurityContext = evidenceSecurityContext;
 
-        return ToolObservation.builder()
-                .taskId(taskId)
-                .toolName(toolName)
-                .success(true)
-                .content(content)
-                .build();
-    }
-
-    /**
-     * 创建失败 Observation。
-     *
-     * @param taskId       对应任务 ID
-     * @param toolName     Tool 名称
-     * @param errorMessage 错误信息
-     * @return 失败 Observation
-     */
-    public static ToolObservation failure(
-            String taskId,
-            String toolName,
-            String errorMessage) {
-
-        return ToolObservation.builder()
-                .taskId(taskId)
-                .toolName(toolName)
-                .success(false)
-                .errorMessage(errorMessage)
-                .build();
-    }
-
-    /**
-     * 判断是否为失败 Observation。
-     */
-    public boolean isFailure() {
-        return !success;
-    }
-
-    /**
-     * 校验 Observation 状态一致性。
-     *
-     * <p>
-     * 成功时必须有 content；
-     * 失败时必须有 errorMessage。
-     * </p>
-     */
-    private void validateState() {
-
-        if (success) {
-            if (content == null) {
-                throw new IllegalArgumentException(
-                        "Successful observation must contain content");
-            }
-
-            if (errorMessage != null) {
-                throw new IllegalArgumentException(
-                        "Successful observation must not contain errorMessage");
-            }
-
-            return;
+                validateState();
         }
 
-        if (errorMessage == null) {
-            throw new IllegalArgumentException(
-                    "Failed observation must contain errorMessage");
+        /**
+         * 创建成功 Observation。
+         *
+         * @param taskId   对应任务 ID
+         * @param toolName Tool 名称
+         * @param content  Tool 执行结果
+         * @return 成功 Observation
+         */
+        public static ToolObservation success(
+                        String taskId,
+                        String toolName,
+                        String content) {
+
+                return success(
+                                taskId,
+                                toolName,
+                                content,
+                                defaultEvidenceSecurityContext());
         }
 
-        if (content != null) {
-            throw new IllegalArgumentException(
-                    "Failed observation must not contain content");
-        }
-    }
+        public static ToolObservation success(
+                        String taskId,
+                        String toolName,
+                        String content,
+                        LegalSecurityContext evidenceSecurityContext) {
 
-    private static String normalizeRequiredText(
-            String value,
-            String nullMessage,
-            String blankMessage) {
-
-        Objects.requireNonNull(
-                value,
-                nullMessage);
-
-        String normalized = value.trim();
-
-        if (normalized.isEmpty()) {
-            throw new IllegalArgumentException(
-                    blankMessage);
+                return new ToolObservation(
+                                taskId,
+                                toolName,
+                                true,
+                                content,
+                                null,
+                                Objects.requireNonNull(
+                                                evidenceSecurityContext,
+                                                "evidenceSecurityContext must not be null"));
         }
 
-        return normalized;
-    }
+        /**
+         * 创建失败 Observation。
+         *
+         * @param taskId       对应任务 ID
+         * @param toolName     Tool 名称
+         * @param errorMessage 错误信息
+         * @return 失败 Observation
+         */
+        public static ToolObservation failure(
+                        String taskId,
+                        String toolName,
+                        String errorMessage) {
 
-    private static String normalizeOptionalText(
-            String value) {
-
-        if (value == null) {
-            return null;
+                return failure(
+                                taskId,
+                                toolName,
+                                errorMessage,
+                                defaultEvidenceSecurityContext());
         }
 
-        String normalized = value.trim();
+        public static ToolObservation failure(
+                        String taskId,
+                        String toolName,
+                        String errorMessage,
+                        LegalSecurityContext evidenceSecurityContext) {
 
-        return normalized.isEmpty()
-                ? null
-                : normalized;
-    }
+                return new ToolObservation(
+                                taskId,
+                                toolName,
+                                false,
+                                null,
+                                errorMessage,
+                                Objects.requireNonNull(
+                                                evidenceSecurityContext,
+                                                "evidenceSecurityContext must not be null"));
+        }
+
+        public Optional<LegalSecurityContext> getEvidenceSecurityContext() {
+
+                return Optional.ofNullable(
+                                evidenceSecurityContext);
+        }
+
+        public boolean hasEvidenceSecurityContext() {
+
+                return evidenceSecurityContext != null;
+        }
+
+        /**
+         * 判断是否为失败 Observation。
+         */
+        public boolean isFailure() {
+                return !success;
+        }
+
+        /**
+         * 校验 Observation 状态一致性。
+         *
+         * <p>
+         * 成功时必须有 content；
+         * 失败时必须有 errorMessage。
+         * </p>
+         */
+        private void validateState() {
+
+                if (success) {
+                        if (content == null) {
+                                throw new IllegalArgumentException(
+                                                "Successful observation must contain content");
+                        }
+
+                        if (errorMessage != null) {
+                                throw new IllegalArgumentException(
+                                                "Successful observation must not contain errorMessage");
+                        }
+
+                        return;
+                }
+
+                if (errorMessage == null) {
+                        throw new IllegalArgumentException(
+                                        "Failed observation must contain errorMessage");
+                }
+
+                if (content != null) {
+                        throw new IllegalArgumentException(
+                                        "Failed observation must not contain content");
+                }
+        }
+
+        private static String normalizeRequiredText(
+                        String value,
+                        String nullMessage,
+                        String blankMessage) {
+
+                Objects.requireNonNull(
+                                value,
+                                nullMessage);
+
+                String normalized = value.trim();
+
+                if (normalized.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                        blankMessage);
+                }
+
+                return normalized;
+        }
+
+        private static String normalizeOptionalText(
+                        String value) {
+
+                if (value == null) {
+                        return null;
+                }
+
+                String normalized = value.trim();
+
+                return normalized.isEmpty()
+                                ? null
+                                : normalized;
+        }
+
+        private static LegalSecurityContext defaultEvidenceSecurityContext() {
+
+                return LegalSecurityContext.of(
+                                SecuritySource.TOOL_RESULT,
+                                SecurityTrustLevel.UNTRUSTED);
+        }
 }

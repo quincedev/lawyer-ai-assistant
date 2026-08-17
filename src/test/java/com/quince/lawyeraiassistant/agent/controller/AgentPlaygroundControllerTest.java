@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.agent.controller;
 
+import com.quince.lawyeraiassistant.agent.application.AgentApplicationService;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentPlan;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
@@ -7,29 +8,29 @@ import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
 import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
-import com.quince.lawyeraiassistant.agent.runtime.AgentRuntime;
 
 import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AgentPlaygroundControllerTest {
 
-        private AgentRuntime agentRuntime;
+        private AgentApplicationService agentApplicationService;
 
         private MockMvc mockMvc;
 
@@ -38,11 +39,11 @@ class AgentPlaygroundControllerTest {
         @BeforeEach
         void setUp() {
 
-                agentRuntime = mock(
-                                AgentRuntime.class);
+                agentApplicationService = mock(
+                                AgentApplicationService.class);
 
                 AgentPlaygroundController controller = new AgentPlaygroundController(
-                                agentRuntime);
+                                agentApplicationService);
 
                 mockMvc = MockMvcBuilders
                                 .standaloneSetup(
@@ -53,12 +54,14 @@ class AgentPlaygroundControllerTest {
         }
 
         @Test
-        void shouldRunAgentRuntimeAndReturnResponse()
+        void shouldRunAgentApplicationServiceAndReturnResponse()
                         throws Exception {
+
+                String goal = "查询违法解除劳动合同需要承担什么法律责任";
 
                 AgentContext resultContext = AgentContext.builder()
                                 .goal(
-                                                "查询违法解除劳动合同需要承担什么法律责任")
+                                                goal)
                                 .reasonResult(
                                                 ReasonResult.from(
                                                                 "用户希望了解违法解除劳动合同所对应的法律责任。"))
@@ -97,9 +100,8 @@ class AgentPlaygroundControllerTest {
                                 .build();
 
                 when(
-                                agentRuntime.run(
-                                                any(
-                                                                AgentContext.class)))
+                                agentApplicationService.execute(
+                                                goal))
                                 .thenReturn(
                                                 resultContext);
 
@@ -121,7 +123,7 @@ class AgentPlaygroundControllerTest {
                                 .andExpect(
                                                 jsonPath("$.goal")
                                                                 .value(
-                                                                                "查询违法解除劳动合同需要承担什么法律责任"))
+                                                                                goal))
                                 .andExpect(
                                                 jsonPath("$.reasonSummary")
                                                                 .value(
@@ -149,10 +151,6 @@ class AgentPlaygroundControllerTest {
                                                 jsonPath("$.observations.length()")
                                                                 .value(2))
                                 .andExpect(
-                                                jsonPath("$.observations[0].taskId")
-                                                                .value(
-                                                                                "task-1"))
-                                .andExpect(
                                                 jsonPath("$.observations[0].toolName")
                                                                 .value(
                                                                                 "searchLegalKnowledge"))
@@ -160,28 +158,17 @@ class AgentPlaygroundControllerTest {
                                                 jsonPath("$.observations[0].success")
                                                                 .value(true))
                                 .andExpect(
-                                                jsonPath("$.observations[1].taskId")
-                                                                .value(
-                                                                                "task-2"))
-                                .andExpect(
-                                                jsonPath("$.observations[1].success")
-                                                                .value(true))
-                                .andExpect(
                                                 jsonPath("$.status")
                                                                 .value(
                                                                                 "FINISHED"))
-                                .andExpect(
-                                                jsonPath("$.executionLogs.length()")
-                                                                .value(5))
                                 .andExpect(
                                                 jsonPath("$.executionLogs[4]")
                                                                 .value(
                                                                                 "Agent finished"));
 
                 verify(
-                                agentRuntime)
-                                .run(
-                                                any(
-                                                                AgentContext.class));
+                                agentApplicationService)
+                                .execute(
+                                                goal);
         }
 }

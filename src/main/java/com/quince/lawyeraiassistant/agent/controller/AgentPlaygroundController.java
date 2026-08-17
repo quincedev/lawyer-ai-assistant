@@ -1,9 +1,9 @@
 package com.quince.lawyeraiassistant.agent.controller;
 
+import com.quince.lawyeraiassistant.agent.application.AgentApplicationService;
 import com.quince.lawyeraiassistant.agent.dto.AgentRequest;
 import com.quince.lawyeraiassistant.agent.dto.AgentResponse;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
-import com.quince.lawyeraiassistant.agent.runtime.AgentRuntime;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,34 +28,25 @@ import java.util.Objects;
  * </p>
  */
 @RestController
-@RequestMapping("/api/playground/agent")
+@RequestMapping("/api/playground")
 public class AgentPlaygroundController {
 
-        private final AgentRuntime agentRuntime;
+        private final AgentApplicationService agentApplicationService;
 
         public AgentPlaygroundController(
-                        AgentRuntime agentRuntime) {
+                        AgentApplicationService agentApplicationService) {
 
-                this.agentRuntime = Objects.requireNonNull(
-                                agentRuntime,
-                                "agentRuntime must not be null");
+                this.agentApplicationService = Objects.requireNonNull(
+                                agentApplicationService,
+                                "agentApplicationService must not be null");
         }
 
-        /**
-         * 执行一次完整 Agent Runtime。
-         *
-         * @param request Agent 请求
-         * @return Agent 执行结果
-         */
-        @PostMapping
+        @PostMapping("/agent")
         public AgentResponse run(
                         @Valid @RequestBody AgentRequest request) {
 
-                AgentContext initialContext = AgentContext.from(
+                AgentContext result = agentApplicationService.execute(
                                 request.goal());
-
-                AgentContext result = agentRuntime.run(
-                                initialContext);
 
                 return AgentResponse.from(
                                 result);

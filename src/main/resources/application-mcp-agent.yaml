@@ -21,7 +21,7 @@ spring:
                 streamable-http:
                     connections:
                         legal-server:
-                            url: http://localhost:8081
+                            url: ${LEGAL_MCP_SERVER_URL:http://localhost:8081}
                             endpoint: /mcp
 
 app:

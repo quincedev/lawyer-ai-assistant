@@ -27,5 +27,31 @@ spring:
                 enabled: false
 
 app:
+    # ===========================================================
+    # Agent
+    #
+    # MCP Server 本身继续使用 Local Tool 实现真正的法律能力，
+    # 不再继续向其他 MCP Server 转发，避免形成调用环。
+    # ===========================================================
     agent:
         legal-tool-mode: local
+
+    # ===========================================================
+    # MCP Server Security
+    #
+    # Server-side Tool Allowlist。
+    #
+    # 即使 8080 Agent 侧已经通过 ToolAuthorizationService，
+    # 8081 仍然独立执行 Server-side Security。
+    #
+    # 只有这里显式列出的 Tool 才允许执行。
+    # 未配置或不在列表中的 Tool 默认 DENY。
+    # ===========================================================
+    mcp:
+        security:
+            allowed-tools:
+                - searchLegalKnowledge
+
+            arguments:
+                max-string-length: 10000
+                reject-unknown-fields: true

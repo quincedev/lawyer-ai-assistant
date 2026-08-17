@@ -2,6 +2,10 @@ package com.quince.lawyeraiassistant.agent.model;
 
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
+import com.quince.lawyeraiassistant.security.legal.SecuritySource;
+import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,8 +20,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class AgentContextTest {
+
+        private LegalSecurityContext toolResult() {
+
+                return LegalSecurityContext.of(
+                                SecuritySource.TOOL_RESULT,
+                                SecurityTrustLevel.UNTRUSTED);
+        }
 
         @Test
         void shouldRejectBlankFinalAnswer() {
@@ -65,7 +77,7 @@ class AgentContextTest {
         @Test
         void skillContextShouldSurviveContextEvolution() {
                 AgentContext context = AgentContext.from(
-                                                "研究劳动合同问题")
+                                "研究劳动合同问题")
                                 .withSkillContext(
                                                 SkillContext.of(createSkill()));
 
@@ -794,7 +806,8 @@ class AgentContextTest {
                 ToolObservation observation = ToolObservation.success(
                                 "task-1",
                                 "searchLegalKnowledge",
-                                "检索到劳动合同法相关规定");
+                                "检索到劳动合同法相关规定",
+                                toolResult());
 
                 AgentContext updatedContext = originalContext.appendObservation(
                                 observation);
@@ -829,12 +842,14 @@ class AgentContextTest {
                 ToolObservation firstObservation = ToolObservation.success(
                                 "task-1",
                                 "readDocument",
-                                "合同读取成功");
+                                "合同读取成功",
+                                toolResult());
 
                 ToolObservation secondObservation = ToolObservation.success(
                                 "task-2",
                                 "searchLegalKnowledge",
-                                "法律检索成功");
+                                "法律检索成功",
+                                toolResult());
 
                 AgentContext context = AgentContext.builder()
                                 .goal("分析劳动合同")
@@ -862,7 +877,8 @@ class AgentContextTest {
                                 ToolObservation.success(
                                                 "task-1",
                                                 "readDocument",
-                                                "合同读取成功"));
+                                                "合同读取成功",
+                                                toolResult()));
 
                 AgentContext context = AgentContext.builder()
                                 .goal("分析劳动合同")
@@ -887,7 +903,8 @@ class AgentContextTest {
                                                                 ToolObservation.success(
                                                                                 "task-1",
                                                                                 "readDocument",
-                                                                                "合同读取成功")))
+                                                                                "合同读取成功",
+                                                                                toolResult())))
                                 .build();
 
                 assertThrows(
@@ -897,7 +914,8 @@ class AgentContextTest {
                                                                 ToolObservation.success(
                                                                                 "task-2",
                                                                                 "searchLegalKnowledge",
-                                                                                "法律检索成功")));
+                                                                                "法律检索成功",
+                                                                                toolResult())));
         }
 
         @Test
@@ -925,7 +943,8 @@ class AgentContextTest {
                                 ToolObservation.success(
                                                 "task-1",
                                                 "readDocument",
-                                                "合同读取成功"));
+                                                "合同读取成功",
+                                                toolResult()));
 
                 observations.add(null);
 
@@ -978,5 +997,61 @@ class AgentContextTest {
                 assertEquals(
                                 "RuntimeReasonObservation must not be null",
                                 exception.getMessage());
+        }
+
+        @Test
+        void shouldCreateInitialUserSecurityContext() {
+
+                AgentContext context = AgentContext.from(
+                                "劳动合同违法解除如何赔偿？");
+
+                assertTrue(
+                                context.hasLegalSecurityContext());
+
+                LegalSecurityContext securityContext = context.getLegalSecurityContext()
+                                .orElseThrow();
+
+                assertEquals(
+                                SecuritySource.USER_INPUT,
+                                securityContext.source());
+
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                securityContext.trustLevel());
+
+                assertTrue(
+                                securityContext.signals()
+                                                .isEmpty());
+        }
+
+        @Test
+        void shouldPreserveSecurityContextWhenSkillContextIsAttached() {
+
+                AgentContext original = AgentContext.from(
+                                "研究劳动合同违法解除");
+
+                LegalSecurityContext originalSecurityContext = original.getLegalSecurityContext()
+                                .orElseThrow();
+
+                SkillContext skillContext = mock(
+                                SkillContext.class);
+
+                AgentContext updated = original.withSkillContext(
+                                skillContext);
+
+                LegalSecurityContext updatedSecurityContext = updated.getLegalSecurityContext()
+                                .orElseThrow();
+
+                assertSame(
+                                originalSecurityContext,
+                                updatedSecurityContext);
+
+                assertEquals(
+                                SecuritySource.USER_INPUT,
+                                updatedSecurityContext.source());
+
+                assertEquals(
+                                SecurityTrustLevel.UNTRUSTED,
+                                updatedSecurityContext.trustLevel());
         }
 }

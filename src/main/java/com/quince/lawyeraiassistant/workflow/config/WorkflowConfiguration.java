@@ -1,6 +1,6 @@
 package com.quince.lawyeraiassistant.workflow.config;
 
-import com.quince.lawyeraiassistant.agent.runtime.AgentRuntime;
+import com.quince.lawyeraiassistant.agent.application.AgentApplicationService;
 import com.quince.lawyeraiassistant.workflow.agent.AgentWorkflowNodeExecutor;
 import com.quince.lawyeraiassistant.workflow.executor.DefaultWorkflowExecutor;
 import com.quince.lawyeraiassistant.workflow.executor.WorkflowExecutor;
@@ -18,10 +18,10 @@ public class WorkflowConfiguration {
 
     @Bean
     public AgentWorkflowNodeExecutor agentWorkflowNodeExecutor(
-            AgentRuntime agentRuntime) {
+            AgentApplicationService agentApplicationService) {
 
         return new AgentWorkflowNodeExecutor(
-                agentRuntime);
+                agentApplicationService);
     }
 
     @Bean

@@ -6,120 +6,150 @@ import com.quince.lawyeraiassistant.agent.model.ReflectionResult;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.prompt.model.ReplanningPromptContext;
+import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
+import com.quince.lawyeraiassistant.security.SecurityTest;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.quince.lawyeraiassistant.security.legal.TestLegalSecurityContexts.toolResult;
+
+import org.junit.jupiter.api.BeforeEach;
 
 class ReplanningPromptContextBuilderTest {
 
-    private final ReplanningPromptContextBuilder builder = new ReplanningPromptContextBuilder();
+        private ReplanningPromptContextBuilder builder;
 
-    @Test
-    void shouldBuildReplanningPromptContext() {
+        @BeforeEach
+        void setUp() {
 
-        AgentContext context = AgentContext.from(
-                "分析违法解除劳动合同")
-                .appendObservation(
-                        ToolObservation.success(
-                                "task-1",
-                                "searchLegalKnowledge",
-                                "发现需要进一步分析赔偿责任"));
+                builder = new ReplanningPromptContextBuilder(
+                                new LegalEvidencePromptFormatter());
+        }
 
-        ReflectionResult reflectionResult = ReflectionResult.of(
-                ReflectionDecision.REPLAN,
-                "原计划没有覆盖违法解除赔偿责任");
+        @SecurityTest
+        @Test
+        void shouldBuildReplanningPromptContext() {
 
-        ReplanningPromptContext result = builder.build(
-                context,
-                reflectionResult);
+                AgentContext context = AgentContext.from(
+                                "分析违法解除劳动合同")
+                                .appendObservation(
+                                                ToolObservation.success(
+                                                                "task-1",
+                                                                "searchLegalKnowledge",
+                                                                "发现需要进一步分析赔偿责任",
+                                                                toolResult()));
 
-        assertEquals(
-                "分析违法解除劳动合同",
-                result.goal());
+                ReflectionResult reflectionResult = ReflectionResult.of(
+                                ReflectionDecision.REPLAN,
+                                "原计划没有覆盖违法解除赔偿责任");
 
-        assertEquals(
-                "原计划没有覆盖违法解除赔偿责任",
-                result.reflectionSummary());
+                ReplanningPromptContext result = builder.build(
+                                context,
+                                reflectionResult);
 
-        assertTrue(
-                result.observations()
-                        .contains(
-                                "searchLegalKnowledge"));
+                assertEquals(
+                                "分析违法解除劳动合同",
+                                result.goal());
 
-        assertTrue(
-                result.observations()
-                        .contains(
-                                "赔偿责任"));
-    }
+                assertEquals(
+                                "原计划没有覆盖违法解除赔偿责任",
+                                result.reflectionSummary());
 
-    @Test
-    void shouldSupportContextWithoutObservations() {
+                assertTrue(
+                                result.observations()
+                                                .contains(
+                                                                "searchLegalKnowledge"));
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                assertTrue(
+                                result.observations()
+                                                .contains(
+                                                                "赔偿责任"));
 
-        ReflectionResult reflectionResult = ReflectionResult.of(
-                ReflectionDecision.REPLAN,
-                "需要调整计划");
+                assertTrue(
+                                result.observations()
+                                                .contains(
+                                                                "Source: TOOL_RESULT"));
 
-        ReplanningPromptContext result = builder.build(
-                context,
-                reflectionResult);
+                assertTrue(
+                                result.observations()
+                                                .contains(
+                                                                "Trust-Level: UNTRUSTED"));
 
-        assertEquals(
-                "无",
-                result.observations());
-    }
+                assertTrue(
+                                result.observations()
+                                                .contains(
+                                                                "<UNTRUSTED_EVIDENCE>"));
+        }
 
-    @Test
-    void shouldIncludeRuntimeReasonObservations() {
+        @Test
+        void shouldSupportContextWithoutObservations() {
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同")
-                .appendRuntimeReasonObservation(
-                        RuntimeReasonObservation.of(
-                                "task-2",
-                                "原计划缺少对赔偿责任的分析"));
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
 
-        ReflectionResult reflectionResult = ReflectionResult.of(
-                ReflectionDecision.REPLAN,
-                "需要补充赔偿责任任务");
+                ReflectionResult reflectionResult = ReflectionResult.of(
+                                ReflectionDecision.REPLAN,
+                                "需要调整计划");
 
-        ReplanningPromptContext result = builder.build(
-                context,
-                reflectionResult);
+                ReplanningPromptContext result = builder.build(
+                                context,
+                                reflectionResult);
 
-        assertTrue(result.observations().contains("Type: REASON"));
-        assertTrue(result.observations().contains("Task: task-2"));
-        assertTrue(result.observations().contains("原计划缺少对赔偿责任的分析"));
-    }
+                assertEquals(
+                                "无",
+                                result.observations());
+        }
 
-    @Test
-    void shouldRejectNullContext() {
+        @Test
+        void shouldIncludeRuntimeReasonObservations() {
 
-        ReflectionResult reflectionResult = ReflectionResult.of(
-                ReflectionDecision.REPLAN,
-                "需要调整计划");
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同")
+                                .appendRuntimeReasonObservation(
+                                                RuntimeReasonObservation.of(
+                                                                "task-2",
+                                                                "原计划缺少对赔偿责任的分析"));
 
-        assertThrows(
-                NullPointerException.class,
-                () -> builder.build(
-                        null,
-                        reflectionResult));
-    }
+                ReflectionResult reflectionResult = ReflectionResult.of(
+                                ReflectionDecision.REPLAN,
+                                "需要补充赔偿责任任务");
 
-    @Test
-    void shouldRejectNullReflectionResult() {
+                ReplanningPromptContext result = builder.build(
+                                context,
+                                reflectionResult);
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                assertTrue(result.observations().contains("Type: REASON"));
+                assertTrue(result.observations().contains("Task: task-2"));
+                assertTrue(result.observations().contains("原计划缺少对赔偿责任的分析"));
+        }
 
-        assertThrows(
-                NullPointerException.class,
-                () -> builder.build(
-                        context,
-                        null));
-    }
+        @Test
+        void shouldRejectNullContext() {
+
+                ReflectionResult reflectionResult = ReflectionResult.of(
+                                ReflectionDecision.REPLAN,
+                                "需要调整计划");
+
+                assertThrows(
+                                NullPointerException.class,
+                                () -> builder.build(
+                                                null,
+                                                reflectionResult));
+        }
+
+        @Test
+        void shouldRejectNullReflectionResult() {
+
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同");
+
+                assertThrows(
+                                NullPointerException.class,
+                                () -> builder.build(
+                                                context,
+                                                null));
+        }
 }
