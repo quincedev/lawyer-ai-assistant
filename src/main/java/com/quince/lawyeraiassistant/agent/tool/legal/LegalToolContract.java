@@ -6,6 +6,8 @@ public final class LegalToolContract {
 
     public static final String LEGAL_QUESTION = "legalQuestion";
 
+    public static final String EXECUTION_TOKEN = "_executionToken";
+
     private LegalToolContract() {
     }
 }

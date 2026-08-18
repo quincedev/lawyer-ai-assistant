@@ -2,16 +2,21 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
+import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,6 +55,31 @@ class LegalKnowledgeToolTest {
                 assertEquals(
                                 "searchLegalKnowledge",
                                 tool.name());
+        }
+
+        @Test
+        void shouldRetrieveForTenantWhenTrustedContextIsPresent() {
+                String question = "tenant question";
+                ToolAction action = ToolAction.of(
+                                "task-tenant",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT, question));
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                ToolExecutionContext executionContext = ToolExecutionContext.from(
+                                AgentContext.builder().goal("research").tenantContext(tenant).build());
+                RetrieverContext retrievalContext = RetrieverContext.from(QueryContext.from(question));
+                when(retrievalOrchestrator.retrieveForTenant(question, "tenant-a"))
+                                .thenReturn(retrievalContext);
+
+                ToolExecutionResult result = tool.execute(executionContext, action);
+
+                assertTrue(result.isSuccess());
+                verify(retrievalOrchestrator).retrieveForTenant(question, "tenant-a");
+                verify(retrievalOrchestrator, never()).retrieve(question);
         }
 
         @Test

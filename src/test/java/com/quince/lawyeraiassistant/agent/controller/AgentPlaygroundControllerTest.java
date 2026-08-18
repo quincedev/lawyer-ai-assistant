@@ -9,8 +9,6 @@ import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
 import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 
-import tools.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +32,6 @@ class AgentPlaygroundControllerTest {
 
         private MockMvc mockMvc;
 
-        private ObjectMapper objectMapper;
-
         @BeforeEach
         void setUp() {
 
@@ -49,8 +45,6 @@ class AgentPlaygroundControllerTest {
                                 .standaloneSetup(
                                                 controller)
                                 .build();
-
-                objectMapper = new ObjectMapper();
         }
 
         @Test

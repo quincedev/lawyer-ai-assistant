@@ -67,6 +67,11 @@ app:
   agent:
     legal-tool-mode: local
 
+  tenant:
+    quota:
+      # 单个 Tenant 同时允许运行的最大 Agent Execution 数量
+      max-concurrent-agent-executions: 3
+
   # ===========================================================
   # RAG
   # ===========================================================
@@ -155,6 +160,15 @@ security:
 
     output:
       max-length: 20000
+
+  jwt:
+    issuer: lawyer-ai-assistant
+
+    # 开发环境通过环境变量提供。
+    # 不要把真实 Secret 提交到 Git。
+    secret: ${JWT_SECRET:change-this-development-secret-at-least-32-bytes-long}
+
+    access-token-ttl: 1h
 
 # =============================================================
 # Actuator

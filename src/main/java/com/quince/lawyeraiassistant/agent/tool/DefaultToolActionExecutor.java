@@ -63,6 +63,20 @@ public class DefaultToolActionExecutor
         public ToolObservation execute(
                         ToolAction action) {
 
+                return execute(
+                                ToolExecutionContext.sharedOnly(),
+                                action);
+        }
+
+        @Override
+        public ToolObservation execute(
+                        ToolExecutionContext executionContext,
+                        ToolAction action) {
+
+                Objects.requireNonNull(
+                                executionContext,
+                                "ToolExecutionContext must not be null");
+
                 Objects.requireNonNull(
                                 action,
                                 "ToolAction must not be null");
@@ -80,6 +94,7 @@ public class DefaultToolActionExecutor
 
                 Future<ToolExecutionResult> future = executorService.submit(
                                 () -> tool.execute(
+                                                executionContext,
                                                 action));
 
                 ToolExecutionResult result;

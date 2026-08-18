@@ -17,6 +17,7 @@ import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrato
 import com.quince.lawyeraiassistant.security.guardrail.exception.McpToolSecurityViolationException;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
 import com.quince.lawyeraiassistant.security.SecurityTest;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 
@@ -54,7 +55,8 @@ class LegalMcpToolsSecurityIntegrationTest {
                                 retrievalOrchestrator,
                                 resultFormatter,
                                 securityService,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                mock(McpTenantExecutionTokenService.class));
 
                 assertThrows(
                                 McpToolSecurityViolationException.class,
@@ -103,7 +105,8 @@ class LegalMcpToolsSecurityIntegrationTest {
                                 retrievalOrchestrator,
                                 resultFormatter,
                                 securityService,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                mock(McpTenantExecutionTokenService.class));
 
                 String result = tools.searchLegalKnowledge(
                                 "劳动合同问题");

@@ -105,8 +105,8 @@ class SpringAiAgentActionSelectorTest {
 
                 when(
                                 requestSpec.user(
-                                                any(
-                                                                Consumer.class)))
+                                                org.mockito.ArgumentMatchers
+                                                                .<Consumer<ChatClient.PromptUserSpec>>any()))
                                 .thenAnswer(
                                                 invocation -> {
                                                         Consumer<ChatClient.PromptUserSpec> userSpecConsumer = invocation

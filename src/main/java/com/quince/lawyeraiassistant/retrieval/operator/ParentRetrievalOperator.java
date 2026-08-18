@@ -1,7 +1,9 @@
 package com.quince.lawyeraiassistant.retrieval.operator;
 
+import com.quince.lawyeraiassistant.rag.vector.tenant.TenantKnowledgeAccessPolicy;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.parent.provider.ParentDocumentProvider;
+
 import org.springframework.ai.document.Document;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -12,32 +14,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Parent Retrieval 节点。
- *
- * <p>
- * 根据 Child Chunk metadata 中的 parent_document_id，
- * 批量查询对应的 Parent Document。
- * </p>
- *
- * <p>
- * 执行流程：
- * </p>
- *
- * <pre>
- * Child Chunks
- *      ↓
- * 提取 parent_document_id
- *      ↓
- * 去重并保留原始顺序
- *      ↓
- * ParentDocumentProvider
- *      ↓
- * Parent Documents
- *      ↓
- * 新的 RetrieverContext
- * </pre>
- */
 @Component
 @Order(200)
 public class ParentRetrievalOperator
@@ -47,12 +23,19 @@ public class ParentRetrievalOperator
 
     private final ParentDocumentProvider parentDocumentProvider;
 
+    private final TenantKnowledgeAccessPolicy tenantKnowledgeAccessPolicy;
+
     public ParentRetrievalOperator(
-            ParentDocumentProvider parentDocumentProvider) {
+            ParentDocumentProvider parentDocumentProvider,
+            TenantKnowledgeAccessPolicy tenantKnowledgeAccessPolicy) {
 
         this.parentDocumentProvider = Objects.requireNonNull(
                 parentDocumentProvider,
                 "parentDocumentProvider must not be null");
+
+        this.tenantKnowledgeAccessPolicy = Objects.requireNonNull(
+                tenantKnowledgeAccessPolicy,
+                "tenantKnowledgeAccessPolicy must not be null");
     }
 
     @Override
@@ -63,10 +46,6 @@ public class ParentRetrievalOperator
                 context,
                 "RetrieverContext must not be null");
 
-        /*
-         * RetrieverContext 已保证 documents 不为 null，
-         * 因此这里只需判断是否为空。
-         */
         if (!context.hasDocuments()) {
             return context;
         }
@@ -74,29 +53,64 @@ public class ParentRetrievalOperator
         Set<String> parentDocumentIds = extractParentDocumentIds(
                 context.getDocuments());
 
-        /*
-         * 没有任何 Chunk 包含 parent_document_id 时，
-         * 保留原始 Chunk，不清空结果。
-         */
         if (parentDocumentIds.isEmpty()) {
             return context;
         }
 
-        Collection<Document> parentDocuments = parentDocumentProvider.findAllByIds(parentDocumentIds);
+        Collection<Document> parentDocuments = parentDocumentProvider.findAllByIds(
+                parentDocumentIds);
 
-        /*
-         * Provider 找不到 Parent 时，
-         * 回退到原始 Chunk，避免知识丢失。
-         */
         if (parentDocuments == null
                 || parentDocuments.isEmpty()) {
+
+            return context;
+        }
+
+        List<Document> accessibleParents = parentDocuments.stream()
+                .filter(
+                        Objects::nonNull)
+                .filter(
+                        document -> canAccess(
+                                context,
+                                document))
+                .toList();
+
+        /*
+         * 不能回退到未经 Tenant 验证的 Parent。
+         *
+         * 当前 context 中的 Child Chunk 已经经过
+         * VectorSearchOperator 的 Tenant Filter，
+         * 因此如果没有合法 Parent，保留 Child 是安全的。
+         */
+        if (accessibleParents.isEmpty()) {
             return context;
         }
 
         return context.toBuilder()
                 .documents(
-                        List.copyOf(parentDocuments))
+                        accessibleParents)
                 .build();
+    }
+
+    private boolean canAccess(
+            RetrieverContext context,
+            Document document) {
+
+        if (context.hasTenantId()) {
+
+            return tenantKnowledgeAccessPolicy.canAccess(
+                    document,
+                    context.requireTenantId());
+        }
+
+        /*
+         * Legacy / non-tenant retrieval:
+         *
+         * fail closed -> SHARED ONLY.
+         */
+        return tenantKnowledgeAccessPolicy
+                .canAccessSharedOnly(
+                        document);
     }
 
     private Set<String> extractParentDocumentIds(
@@ -105,20 +119,24 @@ public class ParentRetrievalOperator
         Set<String> parentDocumentIds = new LinkedHashSet<>();
 
         for (Document document : documents) {
+
             if (document == null) {
                 continue;
             }
 
             Object rawParentId = document.getMetadata()
-                    .get(PARENT_DOCUMENT_ID);
+                    .get(
+                            PARENT_DOCUMENT_ID);
 
             if (rawParentId == null) {
                 continue;
             }
 
-            String parentId = rawParentId.toString().trim();
+            String parentId = rawParentId.toString()
+                    .trim();
 
             if (!parentId.isEmpty()) {
+
                 parentDocumentIds.add(
                         parentId);
             }

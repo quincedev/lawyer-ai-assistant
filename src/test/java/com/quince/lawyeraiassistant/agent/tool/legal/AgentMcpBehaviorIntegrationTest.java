@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.model.AgentContext;
 
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
@@ -9,12 +10,16 @@ import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.agent.tool.DefaultToolActionExecutor;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +43,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class AgentMcpBehaviorIntegrationTest {
 
@@ -55,6 +61,10 @@ class AgentMcpBehaviorIntegrationTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private McpTenantExecutionTokenService tenantExecutionTokenService;
+
+        private ObjectMapper objectMapper;
+
         @BeforeEach
         void setUp() {
 
@@ -68,6 +78,10 @@ class AgentMcpBehaviorIntegrationTest {
                                 ToolDefinition.class);
 
                 securityAuditLogger = mock(SecurityAuditLogger.class);
+
+                tenantExecutionTokenService = mock(McpTenantExecutionTokenService.class);
+
+                objectMapper = new ObjectMapper();
 
                 when(
                                 definition.name())
@@ -100,9 +114,10 @@ class AgentMcpBehaviorIntegrationTest {
 
                 McpLegalKnowledgeTool mcpTool = new McpLegalKnowledgeTool(
                                 provider,
-                                new ObjectMapper(),
+                                objectMapper,
                                 resultSecurityService,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                tenantExecutionTokenService);
 
                 toolRegistry = new AgentToolRegistry(
                                 List.of(
@@ -291,5 +306,38 @@ class AgentMcpBehaviorIntegrationTest {
                                 List.of(
                                                 "searchLegalKnowledge"),
                                 availableTools);
+        }
+
+        @Test
+        void shouldPropagateAgentTenantToSignedMcpExecutionToken() throws Exception {
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                AgentContext agentContext = AgentContext.builder()
+                                .goal("research")
+                                .tenantContext(tenant)
+                                .build();
+                ToolAction action = ToolAction.of(
+                                "task-tenant",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT, "question"));
+                when(tenantExecutionTokenService.issue(tenant)).thenReturn("signed-token");
+                when(mcpToolCallback.call(anyString())).thenReturn("result");
+
+                ToolObservation observation = toolActionExecutor.execute(
+                                ToolExecutionContext.from(agentContext),
+                                action);
+
+                assertTrue(observation.isSuccess());
+                verify(tenantExecutionTokenService).issue(tenant);
+                ArgumentCaptor<String> arguments = ArgumentCaptor.forClass(String.class);
+                verify(mcpToolCallback).call(arguments.capture());
+                assertEquals(
+                                "signed-token",
+                                objectMapper.readTree(arguments.getValue())
+                                                .get(LegalToolContract.EXECUTION_TOKEN)
+                                                .asString());
         }
 }

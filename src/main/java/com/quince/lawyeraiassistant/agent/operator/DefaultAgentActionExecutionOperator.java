@@ -9,6 +9,7 @@ import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentRuntimeReasonService;
 import com.quince.lawyeraiassistant.agent.tool.ToolActionExecutor;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -171,7 +172,11 @@ public class DefaultAgentActionExecutionOperator
                                         deniedObservation);
                 }
 
+                ToolExecutionContext executionContext = ToolExecutionContext.from(
+                                context);
+
                 ToolObservation observation = toolActionExecutor.execute(
+                                executionContext,
                                 toolAction);
 
                 return AgentActionExecutionResult.tool(

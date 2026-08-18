@@ -6,6 +6,7 @@ import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultForm
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
 
 import org.junit.jupiter.api.Test;
 
@@ -220,6 +221,12 @@ class LegalToolModeRegistrationTest {
 
                         return mock(
                                         McpToolResultSecurityService.class);
+                }
+
+                @Bean
+                McpTenantExecutionTokenService mcpTenantExecutionTokenService() {
+
+                        return mock(McpTenantExecutionTokenService.class);
                 }
 
                 @Bean

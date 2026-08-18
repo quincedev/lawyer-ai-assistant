@@ -4,9 +4,13 @@ import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
+import com.quince.lawyeraiassistant.security.SecurityTest;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +18,7 @@ import org.springframework.ai.document.Document;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,6 +40,8 @@ class LegalMcpToolsTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private McpTenantExecutionTokenService tenantExecutionTokenService;
+
         @BeforeEach
         void setUp() {
 
@@ -47,6 +54,8 @@ class LegalMcpToolsTest {
                                 McpToolSecurityService.class);
 
                 securityAuditLogger = mock(SecurityAuditLogger.class);
+
+                tenantExecutionTokenService = mock(McpTenantExecutionTokenService.class);
 
                 when(
                                 securityService.evaluate(
@@ -61,7 +70,8 @@ class LegalMcpToolsTest {
                                 retrievalOrchestrator,
                                 resultFormatter,
                                 securityService,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                tenantExecutionTokenService);
         }
 
         @Test
@@ -116,6 +126,58 @@ class LegalMcpToolsTest {
                                 retrievalOrchestrator)
                                 .retrieve(
                                                 "违法解除劳动合同有什么责任");
+        }
+
+        @SecurityTest
+        @Test
+        void shouldRetrieveForTenantWithValidExecutionToken() {
+                String question = "tenant question";
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                RetrieverContext retrievalContext = RetrieverContext.from(QueryContext.from(question));
+                when(tenantExecutionTokenService.verify("valid-token")).thenReturn(tenant);
+                when(retrievalOrchestrator.retrieveForTenant(question, "tenant-a"))
+                                .thenReturn(retrievalContext);
+
+                legalMcpTools.searchLegalKnowledge(question, "valid-token");
+
+                verify(retrievalOrchestrator).retrieveForTenant(question, "tenant-a");
+                verify(retrievalOrchestrator, never()).retrieve(question);
+        }
+
+        @SecurityTest
+        @Test
+        void shouldUseSharedOnlyRetrievalWithoutExecutionToken() {
+                String question = "shared question";
+                when(retrievalOrchestrator.retrieve(question))
+                                .thenReturn(RetrieverContext.from(QueryContext.from(question)));
+
+                legalMcpTools.searchLegalKnowledge(question, null);
+
+                verify(retrievalOrchestrator).retrieve(question);
+                verify(retrievalOrchestrator, never()).retrieveForTenant(
+                                org.mockito.ArgumentMatchers.anyString(),
+                                org.mockito.ArgumentMatchers.anyString());
+        }
+
+        @SecurityTest
+        @Test
+        void shouldNotRetrieveWhenExecutionTokenIsInvalid() {
+                when(tenantExecutionTokenService.verify("invalid-token"))
+                                .thenThrow(new IllegalArgumentException("invalid token"));
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> legalMcpTools.searchLegalKnowledge("question", "invalid-token"));
+
+                verify(retrievalOrchestrator, never()).retrieve(
+                                org.mockito.ArgumentMatchers.anyString());
+                verify(retrievalOrchestrator, never()).retrieveForTenant(
+                                org.mockito.ArgumentMatchers.anyString(),
+                                org.mockito.ArgumentMatchers.anyString());
         }
 
         @Test
@@ -253,7 +315,8 @@ class LegalMcpToolsTest {
                                                 null,
                                                 resultFormatter,
                                                 securityService,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "retrievalOrchestrator must not be null",
@@ -269,7 +332,8 @@ class LegalMcpToolsTest {
                                                 retrievalOrchestrator,
                                                 null,
                                                 securityService,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "resultFormatter must not be null",
@@ -285,7 +349,8 @@ class LegalMcpToolsTest {
                                                 retrievalOrchestrator,
                                                 resultFormatter,
                                                 null,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "mcpToolSecurityService must not be null",

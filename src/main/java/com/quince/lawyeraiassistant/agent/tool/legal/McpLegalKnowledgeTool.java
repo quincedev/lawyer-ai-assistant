@@ -3,6 +3,7 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.tool.AgentTool;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -10,6 +11,7 @@ import com.quince.lawyeraiassistant.security.guardrail.exception.McpToolResultSe
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -60,11 +62,14 @@ public class McpLegalKnowledgeTool
 
         private final SecurityAuditLogger securityAuditLogger;
 
+        private final McpTenantExecutionTokenService tenantExecutionTokenService;
+
         public McpLegalKnowledgeTool(
                         SyncMcpToolCallbackProvider toolCallbackProvider,
                         ObjectMapper objectMapper,
                         McpToolResultSecurityService resultSecurityService,
-                        SecurityAuditLogger securityAuditLogger) {
+                        SecurityAuditLogger securityAuditLogger,
+                        McpTenantExecutionTokenService tenantExecutionTokenService) {
 
                 Objects.requireNonNull(
                                 toolCallbackProvider,
@@ -84,6 +89,10 @@ public class McpLegalKnowledgeTool
 
                 this.toolCallback = resolveToolCallback(
                                 toolCallbackProvider);
+
+                this.tenantExecutionTokenService = Objects.requireNonNull(
+                                tenantExecutionTokenService,
+                                "tenantExecutionTokenService must not be null");
         }
 
         @Override
@@ -96,6 +105,20 @@ public class McpLegalKnowledgeTool
         public ToolExecutionResult execute(
                         ToolAction action) {
 
+                return execute(
+                                ToolExecutionContext.sharedOnly(),
+                                action);
+        }
+
+        @Override
+        public ToolExecutionResult execute(
+                        ToolExecutionContext executionContext,
+                        ToolAction action) {
+
+                Objects.requireNonNull(
+                                executionContext,
+                                "ToolExecutionContext must not be null");
+
                 Objects.requireNonNull(
                                 action,
                                 "ToolAction must not be null");
@@ -104,9 +127,22 @@ public class McpLegalKnowledgeTool
                                 action);
 
                 try {
+                        Map<String, Object> arguments = new java.util.LinkedHashMap<>(
+                                        action.getArguments());
+
+                        if (executionContext.hasTenantContext()) {
+
+                                String executionToken = tenantExecutionTokenService.issue(
+                                                executionContext
+                                                                .requireTenantContext());
+
+                                arguments.put(
+                                                LegalToolContract.EXECUTION_TOKEN,
+                                                executionToken);
+                        }
 
                         String argumentsJson = serializeArguments(
-                                        action.getArguments());
+                                        arguments);
 
                         String rawResult = toolCallback.call(
                                         argumentsJson);
@@ -246,7 +282,7 @@ public class McpLegalKnowledgeTool
                                 }
 
                                 String text = content.get("text")
-                                                .asText();
+                                                .asString();
 
                                 if (text == null
                                                 || text.isBlank()) {

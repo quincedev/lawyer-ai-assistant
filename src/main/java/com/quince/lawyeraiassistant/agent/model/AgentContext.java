@@ -5,6 +5,7 @@ import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -102,6 +103,8 @@ public final class AgentContext {
 
         private final LegalSecurityContext legalSecurityContext;
 
+        private final TenantContext tenantContext;
+
         @Builder(toBuilder = true)
         private AgentContext(
                         String goal,
@@ -113,7 +116,8 @@ public final class AgentContext {
                         String finalAnswer,
                         List<RuntimeReasonObservation> runtimeReasonObservations,
                         SkillContext skillContext,
-                        LegalSecurityContext legalSecurityContext) {
+                        LegalSecurityContext legalSecurityContext,
+                        TenantContext tenantContext) {
 
                 this.goal = normalizeGoal(
                                 goal);
@@ -141,6 +145,8 @@ public final class AgentContext {
                 this.skillContext = skillContext;
 
                 this.legalSecurityContext = legalSecurityContext;
+
+                this.tenantContext = tenantContext;
         }
 
         /**
@@ -172,6 +178,37 @@ public final class AgentContext {
                                                                 SecuritySource.USER_INPUT,
                                                                 SecurityTrustLevel.UNTRUSTED))
                                 .build();
+        }
+
+        public static AgentContext authenticated(
+                        String goal,
+                        TenantContext tenantContext) {
+
+                Objects.requireNonNull(
+                                tenantContext,
+                                "TenantContext must not be null");
+
+                return AgentContext.builder()
+                                .goal(
+                                                goal)
+                                .legalSecurityContext(
+                                                LegalSecurityContext.of(
+                                                                SecuritySource.USER_INPUT,
+                                                                SecurityTrustLevel.UNTRUSTED))
+                                .tenantContext(
+                                                tenantContext)
+                                .build();
+        }
+
+        public TenantContext requireTenantContext() {
+
+                if (tenantContext == null) {
+
+                        throw new IllegalStateException(
+                                        "TenantContext is required for authenticated Agent execution");
+                }
+
+                return tenantContext;
         }
 
         /**

@@ -55,15 +55,21 @@ public final class RetrieverContext {
      */
     private final List<Document> documents;
 
+    private final String tenantId;
+
     @Builder(toBuilder = true)
     private RetrieverContext(
             QueryContext queryContext,
-            List<Document> documents) {
+            List<Document> documents,
+            String tenantId) {
         this.queryContext = Objects.requireNonNull(
                 queryContext,
                 "QueryContext must not be null");
 
         this.documents = normalizeDocuments(documents);
+
+        this.tenantId = normalizeOptionalTenantId(
+                tenantId);
     }
 
     /**
@@ -111,6 +117,46 @@ public final class RetrieverContext {
         return documents.size();
     }
 
+    public static RetrieverContext tenantAware(
+            QueryContext queryContext,
+            String tenantId) {
+
+        Objects.requireNonNull(
+                tenantId,
+                "tenantId must not be null");
+
+        String normalizedTenantId = tenantId.trim();
+
+        if (normalizedTenantId.isEmpty()) {
+
+            throw new IllegalArgumentException(
+                    "tenantId must not be blank");
+        }
+
+        return RetrieverContext.builder()
+                .queryContext(
+                        queryContext)
+                .tenantId(
+                        normalizedTenantId)
+                .build();
+    }
+
+    public boolean hasTenantId() {
+
+        return tenantId != null;
+    }
+
+    public String requireTenantId() {
+
+        if (tenantId == null) {
+
+            throw new IllegalStateException(
+                    "Tenant-aware retrieval requires tenantId");
+        }
+
+        return tenantId;
+    }
+
     /**
      * 规范化文档列表。
      *
@@ -126,5 +172,19 @@ public final class RetrieverContext {
         }
 
         return List.copyOf(documents);
+    }
+
+    private static String normalizeOptionalTenantId(
+            String tenantId) {
+
+        if (tenantId == null) {
+            return null;
+        }
+
+        String normalized = tenantId.trim();
+
+        return normalized.isEmpty()
+                ? null
+                : normalized;
     }
 }

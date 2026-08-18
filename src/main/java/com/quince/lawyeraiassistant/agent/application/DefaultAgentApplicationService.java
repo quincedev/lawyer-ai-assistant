@@ -15,21 +15,27 @@ import com.quince.lawyeraiassistant.security.guardrail.exception.InputGuardrailV
 import com.quince.lawyeraiassistant.security.guardrail.exception.OutputGuardrailViolationException;
 import com.quince.lawyeraiassistant.security.guardrail.input.InputGuardrailChain;
 import com.quince.lawyeraiassistant.security.guardrail.output.OutputGuardrailChain;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
+import com.quince.lawyeraiassistant.security.tenant.TenantContextProvider;
+import com.quince.lawyeraiassistant.security.tenant.authorization.TenantAccessDeniedException;
+import com.quince.lawyeraiassistant.security.tenant.authorization.TenantAuthorizationService;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantQuotaLease;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantResourceQuotaExceededException;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantResourceQuotaService;
 
 /**
  * Default application service for Agent execution.
- *
- * <p>
- * This service represents the application boundary between
- * external adapters and the Agent Runtime.
- * </p>
  *
  * <pre>
  * External Input
  *      ↓
  * InputGuardrailChain
  *      ↓
- * ALLOW / BLOCK
+ * TenantContext
+ *      ↓
+ * Tenant Authorization
+ *      ↓
+ * AgentContext
  *      ↓
  * AgentRuntime
  *      ↓
@@ -48,11 +54,20 @@ public class DefaultAgentApplicationService
 
         private final SecurityAuditLogger securityAuditLogger;
 
+        private final TenantContextProvider tenantContextProvider;
+
+        private final TenantAuthorizationService tenantAuthorizationService;
+
+        private final TenantResourceQuotaService tenantResourceQuotaService;
+
         public DefaultAgentApplicationService(
                         AgentRuntime agentRuntime,
                         InputGuardrailChain inputGuardrailChain,
                         OutputGuardrailChain outputGuardrailChain,
-                        SecurityAuditLogger securityAuditLogger) {
+                        SecurityAuditLogger securityAuditLogger,
+                        TenantContextProvider tenantContextProvider,
+                        TenantAuthorizationService tenantAuthorizationService,
+                        TenantResourceQuotaService tenantResourceQuotaService) {
 
                 this.agentRuntime = Objects.requireNonNull(
                                 agentRuntime,
@@ -69,6 +84,18 @@ public class DefaultAgentApplicationService
                 this.securityAuditLogger = Objects.requireNonNull(
                                 securityAuditLogger,
                                 "securityAuditLogger must not be null");
+
+                this.tenantContextProvider = Objects.requireNonNull(
+                                tenantContextProvider,
+                                "tenantContextProvider must not be null");
+
+                this.tenantAuthorizationService = Objects.requireNonNull(
+                                tenantAuthorizationService,
+                                "tenantAuthorizationService must not be null");
+
+                this.tenantResourceQuotaService = Objects.requireNonNull(
+                                tenantResourceQuotaService,
+                                "tenantResourceQuotaService must not be null");
         }
 
         @Override
@@ -81,11 +108,23 @@ public class DefaultAgentApplicationService
                 enforceInputGuardrail(
                                 inputResult);
 
-                AgentContext initialContext = AgentContext.from(
-                                goal);
+                TenantContext tenantContext = tenantContextProvider.current();
 
-                AgentContext result = agentRuntime.run(
-                                initialContext);
+                authorizeTenant(
+                                tenantContext);
+
+                AgentContext initialContext = AgentContext.authenticated(
+                                goal,
+                                tenantContext);
+
+                AgentContext result;
+
+                try (TenantQuotaLease ignored = acquireTenantExecutionQuota(
+                                tenantContext)) {
+
+                        result = agentRuntime.run(
+                                        initialContext);
+                }
 
                 GuardrailResult outputResult = outputGuardrailChain.evaluate(
                                 result.getFinalAnswer());
@@ -94,6 +133,31 @@ public class DefaultAgentApplicationService
                                 outputResult);
 
                 return result;
+        }
+
+        private void authorizeTenant(
+                        TenantContext tenantContext) {
+
+                try {
+
+                        tenantAuthorizationService.authorizeAgentAccess(
+                                        tenantContext);
+
+                } catch (TenantAccessDeniedException exception) {
+
+                        securityAuditLogger.log(
+                                        SecurityAuditEvent.warn(
+                                                        SecurityAuditEventType.TENANT_ACCESS_DENIED,
+                                                        "DefaultAgentApplicationService",
+                                                        "Tenant access denied",
+                                                        Map.of(
+                                                                        "tenantId",
+                                                                        tenantContext.tenantId(),
+                                                                        "userId",
+                                                                        tenantContext.userId())));
+
+                        throw exception;
+                }
         }
 
         private void enforceInputGuardrail(
@@ -141,5 +205,31 @@ public class DefaultAgentApplicationService
                                                                 result.guardrailName())));
 
                 throw new OutputGuardrailViolationException();
+        }
+
+        private TenantQuotaLease acquireTenantExecutionQuota(
+                        TenantContext tenantContext) {
+
+                try {
+
+                        return tenantResourceQuotaService
+                                        .acquireAgentExecution(
+                                                        tenantContext);
+
+                } catch (TenantResourceQuotaExceededException exception) {
+
+                        securityAuditLogger.log(
+                                        SecurityAuditEvent.warn(
+                                                        SecurityAuditEventType.TENANT_RESOURCE_QUOTA_EXCEEDED,
+                                                        "DefaultAgentApplicationService",
+                                                        "Tenant Agent execution quota exceeded",
+                                                        Map.of(
+                                                                        "tenantId",
+                                                                        tenantContext.tenantId(),
+                                                                        "userId",
+                                                                        tenantContext.userId())));
+
+                        throw exception;
+                }
         }
 }

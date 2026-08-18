@@ -196,6 +196,31 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- ========================================================= -->
+		<!-- Spring Security                                           -->
+		<!-- ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!-- ========================================================= -->
+		<!-- OAuth2 Resource Server / JWT                              -->
+		<!-- ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+		</dependency>
+
+		<!-- ========================================================= -->
+		<!-- Spring Security Test                                      -->
+		<!-- ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 
 	<!-- ===================================================== -->
@@ -276,7 +301,6 @@
 						</goals>
 
 						<configuration>
-
 							<annotationProcessorPaths>
 
 								<path>

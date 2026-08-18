@@ -2,10 +2,15 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
+import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.security.SecurityTest;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.result.McpToolResultSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +24,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,6 +54,8 @@ class McpLegalKnowledgeToolTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private McpTenantExecutionTokenService tenantExecutionTokenService;
+
         @BeforeEach
         void setUp() {
 
@@ -64,6 +72,8 @@ class McpLegalKnowledgeToolTest {
                                 McpToolResultSecurityService.class);
 
                 securityAuditLogger = mock(SecurityAuditLogger.class);
+
+                tenantExecutionTokenService = mock(McpTenantExecutionTokenService.class);
 
                 objectMapper = new ObjectMapper();
 
@@ -97,7 +107,8 @@ class McpLegalKnowledgeToolTest {
                                 toolCallbackProvider,
                                 objectMapper,
                                 resultSecurityService,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                tenantExecutionTokenService);
         }
 
         @Test
@@ -106,6 +117,36 @@ class McpLegalKnowledgeToolTest {
                 assertEquals(
                                 LegalKnowledgeTool.TOOL_NAME,
                                 tool.name());
+        }
+
+        @SecurityTest
+        @Test
+        void shouldIssueTenantTokenAndKeepIdentityOutOfLlmArguments() throws Exception {
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                ToolExecutionContext executionContext = ToolExecutionContext.from(
+                                AgentContext.builder().goal("research").tenantContext(tenant).build());
+                ToolAction action = ToolAction.of(
+                                "task-1",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT, "question"));
+                when(tenantExecutionTokenService.issue(tenant)).thenReturn("signed-token");
+                when(toolCallback.call(anyString())).thenReturn("result");
+
+                ToolExecutionResult result = tool.execute(executionContext, action);
+
+                assertTrue(result.isSuccess());
+                verify(tenantExecutionTokenService).issue(tenant);
+                ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+                verify(toolCallback).call(jsonCaptor.capture());
+                var json = objectMapper.readTree(jsonCaptor.getValue());
+                assertEquals("signed-token", json.get(LegalToolContract.EXECUTION_TOKEN).asString());
+                assertFalse(json.has("tenantId"));
+                assertFalse(json.has("token"));
+                assertFalse(action.getArguments().containsKey(LegalToolContract.EXECUTION_TOKEN));
         }
 
         @Test
@@ -367,7 +408,8 @@ class McpLegalKnowledgeToolTest {
                                                 toolCallbackProvider,
                                                 objectMapper,
                                                 resultSecurityService,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "MCP tool not found: searchLegalKnowledge",
@@ -383,7 +425,8 @@ class McpLegalKnowledgeToolTest {
                                                 null,
                                                 objectMapper,
                                                 resultSecurityService,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "toolCallbackProvider must not be null",
@@ -399,7 +442,8 @@ class McpLegalKnowledgeToolTest {
                                                 toolCallbackProvider,
                                                 null,
                                                 resultSecurityService,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "objectMapper must not be null",
@@ -606,7 +650,8 @@ class McpLegalKnowledgeToolTest {
                                                 toolCallbackProvider,
                                                 objectMapper,
                                                 null,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantExecutionTokenService));
 
                 assertEquals(
                                 "resultSecurityService must not be null",

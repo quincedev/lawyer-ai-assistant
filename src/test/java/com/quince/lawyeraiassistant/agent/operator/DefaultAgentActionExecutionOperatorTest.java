@@ -11,6 +11,7 @@ import com.quince.lawyeraiassistant.agent.service.AgentRuntimeReasonService;
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.tool.ToolActionExecutor;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.security.authorization.tool.ToolAuthorizationResult;
 import com.quince.lawyeraiassistant.security.authorization.tool.ToolAuthorizationService;
 import com.quince.lawyeraiassistant.security.SecurityTest;
@@ -18,10 +19,13 @@ import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -73,6 +77,41 @@ class DefaultAgentActionExecutionOperatorTest {
                                 finalAnswerService,
                                 toolAuthorizationService,
                                 securityAuditLogger);
+        }
+
+        @Test
+        void shouldPropagateTenantContextToToolExecutor() {
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                AgentContext context = AgentContext.builder()
+                                .goal("research")
+                                .tenantContext(tenant)
+                                .build();
+                AgentTask task = AgentTask.pending("task-1", "retrieve");
+                ToolAction toolAction = ToolAction.of("task-1", "searchLegalKnowledge");
+                ToolObservation observation = ToolObservation.success(
+                                "task-1",
+                                "searchLegalKnowledge",
+                                "result");
+
+                when(toolAuthorizationService.authorize(context, toolAction))
+                                .thenReturn(ToolAuthorizationResult.allow(
+                                                "searchLegalKnowledge",
+                                                "testAuthorization"));
+                when(toolActionExecutor.execute(any(ToolExecutionContext.class),
+                                org.mockito.ArgumentMatchers.same(toolAction)))
+                                .thenReturn(observation);
+
+                operator.execute(context, task, AgentAction.tool(toolAction));
+
+                ArgumentCaptor<ToolExecutionContext> captor = ArgumentCaptor.forClass(
+                                ToolExecutionContext.class);
+                verify(toolActionExecutor).execute(captor.capture(),
+                                org.mockito.ArgumentMatchers.same(toolAction));
+                assertSame(tenant, captor.getValue().requireTenantContext());
         }
 
         @Test
@@ -304,7 +343,8 @@ class DefaultAgentActionExecutionOperatorTest {
 
                 when(
                                 toolActionExecutor.execute(
-                                                toolAction))
+                                                any(ToolExecutionContext.class),
+                                                org.mockito.ArgumentMatchers.same(toolAction)))
                                 .thenReturn(
                                                 observation);
 
@@ -323,7 +363,8 @@ class DefaultAgentActionExecutionOperatorTest {
                 verify(
                                 toolActionExecutor)
                                 .execute(
-                                                toolAction);
+                                                any(ToolExecutionContext.class),
+                                                org.mockito.ArgumentMatchers.same(toolAction));
 
                 verify(
                                 toolAuthorizationService)
@@ -524,7 +565,8 @@ class DefaultAgentActionExecutionOperatorTest {
 
                 when(
                                 toolActionExecutor.execute(
-                                                toolAction))
+                                                any(ToolExecutionContext.class),
+                                                org.mockito.ArgumentMatchers.same(toolAction)))
                                 .thenReturn(
                                                 observation);
 
@@ -558,7 +600,8 @@ class DefaultAgentActionExecutionOperatorTest {
                 inOrder.verify(
                                 toolActionExecutor)
                                 .execute(
-                                                toolAction);
+                                                any(ToolExecutionContext.class),
+                                                org.mockito.ArgumentMatchers.same(toolAction));
         }
 
         @SecurityTest

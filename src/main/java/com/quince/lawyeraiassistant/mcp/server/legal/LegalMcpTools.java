@@ -10,6 +10,8 @@ import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.guardrail.exception.McpToolSecurityViolationException;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityResult;
 import com.quince.lawyeraiassistant.security.mcp.McpToolSecurityService;
+import com.quince.lawyeraiassistant.security.mcp.tenant.McpTenantExecutionTokenService;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -68,11 +70,14 @@ public class LegalMcpTools {
 
         private final SecurityAuditLogger securityAuditLogger;
 
+        private final McpTenantExecutionTokenService tenantExecutionTokenService;
+
         public LegalMcpTools(
                         RetrievalOrchestrator retrievalOrchestrator,
                         LegalRetrievalResultFormatter resultFormatter,
                         McpToolSecurityService mcpToolSecurityService,
-                        SecurityAuditLogger securityAuditLogger) {
+                        SecurityAuditLogger securityAuditLogger,
+                        McpTenantExecutionTokenService tenantExecutionTokenService) {
 
                 this.retrievalOrchestrator = Objects.requireNonNull(
                                 retrievalOrchestrator,
@@ -89,6 +94,10 @@ public class LegalMcpTools {
                 this.securityAuditLogger = Objects.requireNonNull(
                                 securityAuditLogger,
                                 "securityAuditLogger must not be null");
+
+                this.tenantExecutionTokenService = Objects.requireNonNull(
+                                tenantExecutionTokenService,
+                                "tenantExecutionTokenService must not be null");
         }
 
         /**
@@ -97,7 +106,10 @@ public class LegalMcpTools {
          */
         @McpTool(name = LegalToolContract.SEARCH_LEGAL_KNOWLEDGE, description = "检索中国法律知识库，为法律问题分析提供相关法律条文和参考资料")
         public String searchLegalKnowledge(
-                        @McpToolParam(description = "需要检索法律依据的法律问题", required = true) String legalQuestion) {
+
+                        @McpToolParam(description = "需要检索法律依据的法律问题", required = true) String legalQuestion,
+
+                        @McpToolParam(description = "Internal tenant execution token", required = false) String executionToken) {
 
                 String normalizedQuestion = normalizeLegalQuestion(
                                 legalQuestion);
@@ -131,8 +143,27 @@ public class LegalMcpTools {
                                 "MCP tool invoked: tool={}",
                                 LegalToolContract.SEARCH_LEGAL_KNOWLEDGE);
 
-                RetrieverContext retrievalContext = retrievalOrchestrator.retrieve(
-                                normalizedQuestion);
+                TenantContext tenantContext = resolveTenantContext(
+                                executionToken);
+
+                RetrieverContext retrievalContext;
+
+                if (tenantContext != null) {
+
+                        retrievalContext = retrievalOrchestrator
+                                        .retrieveForTenant(
+                                                        normalizedQuestion,
+                                                        tenantContext.tenantId());
+
+                } else {
+
+                        /*
+                         * No trusted tenant token:
+                         * Step 5 guarantees SHARED-only retrieval.
+                         */
+                        retrievalContext = retrievalOrchestrator.retrieve(
+                                        normalizedQuestion);
+                }
 
                 Objects.requireNonNull(
                                 retrievalContext,
@@ -140,6 +171,14 @@ public class LegalMcpTools {
 
                 return resultFormatter.format(
                                 retrievalContext);
+        }
+
+        public String searchLegalKnowledge(
+                        String legalQuestion) {
+
+                return searchLegalKnowledge(
+                                legalQuestion,
+                                null);
         }
 
         private String normalizeLegalQuestion(
@@ -158,5 +197,34 @@ public class LegalMcpTools {
                 }
 
                 return normalized;
+        }
+
+        private TenantContext resolveTenantContext(
+                        String executionToken) {
+
+                if (executionToken == null
+                                || executionToken.isBlank()) {
+
+                        return null;
+                }
+
+                try {
+
+                        return tenantExecutionTokenService.verify(
+                                        executionToken);
+
+                } catch (RuntimeException exception) {
+
+                        securityAuditLogger.log(
+                                        SecurityAuditEvent.warn(
+                                                        SecurityAuditEventType.MCP_TENANT_AUTHORIZATION_DENIED,
+                                                        "LegalMcpTools",
+                                                        "Invalid MCP tenant execution token",
+                                                        Map.of(
+                                                                        "toolName",
+                                                                        LegalToolContract.SEARCH_LEGAL_KNOWLEDGE)));
+
+                        throw exception;
+                }
         }
 }

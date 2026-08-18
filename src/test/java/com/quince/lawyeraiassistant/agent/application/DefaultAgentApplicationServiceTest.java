@@ -1,6 +1,7 @@
 package com.quince.lawyeraiassistant.agent.application;
 
 import com.quince.lawyeraiassistant.security.SecurityTest;
+import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
@@ -11,9 +12,17 @@ import com.quince.lawyeraiassistant.security.guardrail.exception.InputGuardrailV
 import com.quince.lawyeraiassistant.security.guardrail.exception.OutputGuardrailViolationException;
 import com.quince.lawyeraiassistant.security.guardrail.input.InputGuardrailChain;
 import com.quince.lawyeraiassistant.security.guardrail.output.OutputGuardrailChain;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
+import com.quince.lawyeraiassistant.security.tenant.TenantContextProvider;
+import com.quince.lawyeraiassistant.security.tenant.authorization.TenantAccessDeniedException;
+import com.quince.lawyeraiassistant.security.tenant.authorization.TenantAuthorizationService;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantQuotaLease;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantResourceQuotaExceededException;
+import com.quince.lawyeraiassistant.security.tenant.quota.TenantResourceQuotaService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,10 +33,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.Set;
 
 class DefaultAgentApplicationServiceTest {
 
@@ -41,6 +54,16 @@ class DefaultAgentApplicationServiceTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private TenantContextProvider tenantContextProvider;
+
+        private TenantAuthorizationService tenantAuthorizationService;
+
+        private TenantContext tenantContext;
+
+        private TenantResourceQuotaService tenantResourceQuotaService;
+
+        private TenantQuotaLease tenantQuotaLease;
+
         @BeforeEach
         void setUp() {
 
@@ -53,13 +76,48 @@ class DefaultAgentApplicationServiceTest {
                 agentRuntime = mock(
                                 AgentRuntime.class);
 
-                securityAuditLogger = mock(SecurityAuditLogger.class);
+                securityAuditLogger = mock(
+                                SecurityAuditLogger.class);
+
+                tenantContextProvider = mock(
+                                TenantContextProvider.class);
+
+                tenantAuthorizationService = mock(
+                                TenantAuthorizationService.class);
+
+                tenantContext = new TenantContext(
+                                "tenant-a",
+                                "user-001",
+                                "quince",
+                                Set.of(
+                                                UserRole.LAWYER));
+
+                tenantResourceQuotaService = mock(
+                                TenantResourceQuotaService.class);
+
+                tenantQuotaLease = mock(
+                                TenantQuotaLease.class);
+
+                when(
+                                tenantResourceQuotaService
+                                                .acquireAgentExecution(
+                                                                tenantContext))
+                                .thenReturn(
+                                                tenantQuotaLease);
+
+                when(
+                                tenantContextProvider.current())
+                                .thenReturn(
+                                                tenantContext);
 
                 service = new DefaultAgentApplicationService(
                                 agentRuntime,
                                 inputGuardrailChain,
                                 outputGuardrailChain,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                tenantContextProvider,
+                                tenantAuthorizationService,
+                                tenantResourceQuotaService);
         }
 
         @SecurityTest
@@ -212,7 +270,10 @@ class DefaultAgentApplicationServiceTest {
                                                 agentRuntime,
                                                 null,
                                                 outputGuardrailChain,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantContextProvider,
+                                                tenantAuthorizationService,
+                                                tenantResourceQuotaService));
 
                 assertEquals(
                                 "inputGuardrailChain must not be null",
@@ -228,7 +289,10 @@ class DefaultAgentApplicationServiceTest {
                                                 null,
                                                 inputGuardrailChain,
                                                 outputGuardrailChain,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantContextProvider,
+                                                tenantAuthorizationService,
+                                                tenantResourceQuotaService));
 
                 assertEquals(
                                 "agentRuntime must not be null",
@@ -426,10 +490,366 @@ class DefaultAgentApplicationServiceTest {
                                                 agentRuntime,
                                                 inputGuardrailChain,
                                                 null,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                tenantContextProvider,
+                                                tenantAuthorizationService,
+                                                tenantResourceQuotaService));
 
                 assertEquals(
                                 "outputGuardrailChain must not be null",
                                 exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullTenantContextProvider() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new DefaultAgentApplicationService(
+                                                agentRuntime,
+                                                inputGuardrailChain,
+                                                outputGuardrailChain,
+                                                securityAuditLogger,
+                                                null,
+                                                tenantAuthorizationService,
+                                                tenantResourceQuotaService));
+
+                assertEquals(
+                                "tenantContextProvider must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldRejectNullTenantAuthorizationService() {
+
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> new DefaultAgentApplicationService(
+                                                agentRuntime,
+                                                inputGuardrailChain,
+                                                outputGuardrailChain,
+                                                securityAuditLogger,
+                                                tenantContextProvider,
+                                                null,
+                                                tenantResourceQuotaService));
+
+                assertEquals(
+                                "tenantAuthorizationService must not be null",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldPropagateAuthenticatedTenantContextIntoAgentRuntime() {
+
+                String goal = "分析劳动合同解除条件";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                AgentContext expected = AgentContext.authenticated(
+                                goal,
+                                tenantContext)
+                                .toBuilder()
+                                .status(
+                                                AgentStatus.FINISHED)
+                                .finalAnswer(
+                                                "法律分析结果")
+                                .build();
+
+                when(
+                                agentRuntime.run(
+                                                any(
+                                                                AgentContext.class)))
+                                .thenReturn(
+                                                expected);
+
+                when(
+                                outputGuardrailChain.evaluate(
+                                                "法律分析结果"))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "outputGuardrailChain"));
+
+                service.execute(
+                                goal);
+
+                ArgumentCaptor<AgentContext> captor = ArgumentCaptor.forClass(
+                                AgentContext.class);
+
+                verify(
+                                agentRuntime)
+                                .run(
+                                                captor.capture());
+
+                AgentContext propagated = captor.getValue();
+
+                TenantContext actual = propagated.requireTenantContext();
+
+                assertSame(
+                                tenantContext,
+                                actual);
+
+                assertEquals(
+                                "tenant-a",
+                                actual.tenantId());
+
+                assertEquals(
+                                "user-001",
+                                actual.userId());
+
+                assertEquals(
+                                "quince",
+                                actual.username());
+
+                verify(
+                                tenantAuthorizationService)
+                                .authorizeAgentAccess(
+                                                tenantContext);
+        }
+
+        @SecurityTest
+        @Test
+        void shouldNotStartAgentRuntimeWhenTenantAuthorizationIsDenied() {
+
+                String goal = "分析劳动合同";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                doThrow(
+                                new TenantAccessDeniedException())
+                                .when(
+                                                tenantAuthorizationService)
+                                .authorizeAgentAccess(
+                                                tenantContext);
+
+                TenantAccessDeniedException exception = assertThrows(
+                                TenantAccessDeniedException.class,
+                                () -> service.execute(
+                                                goal));
+
+                assertEquals(
+                                ErrorCode.TENANT_ACCESS_DENIED,
+                                exception.getErrorCode());
+
+                assertEquals(
+                                HttpStatus.FORBIDDEN,
+                                exception.getStatus());
+
+                assertEquals(
+                                "当前用户无权访问该 AI 服务",
+                                exception.getMessage());
+
+                verify(
+                                agentRuntime,
+                                never())
+                                .run(
+                                                any(
+                                                                AgentContext.class));
+        }
+
+        @Test
+        void shouldAuthorizeTenantBeforeStartingAgentRuntime() {
+
+                String goal = "分析劳动合同";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                AgentContext expected = AgentContext.authenticated(
+                                goal,
+                                tenantContext)
+                                .toBuilder()
+                                .status(
+                                                AgentStatus.FINISHED)
+                                .finalAnswer(
+                                                "法律分析结果")
+                                .build();
+
+                when(
+                                agentRuntime.run(
+                                                any(
+                                                                AgentContext.class)))
+                                .thenReturn(
+                                                expected);
+
+                when(
+                                outputGuardrailChain.evaluate(
+                                                "法律分析结果"))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "outputGuardrailChain"));
+
+                service.execute(
+                                goal);
+
+                org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                                tenantAuthorizationService,
+                                agentRuntime);
+
+                inOrder.verify(
+                                tenantAuthorizationService)
+                                .authorizeAgentAccess(
+                                                tenantContext);
+
+                inOrder.verify(
+                                agentRuntime)
+                                .run(
+                                                any(
+                                                                AgentContext.class));
+        }
+
+        @SecurityTest
+        @Test
+        void shouldAcquireTenantQuotaBeforeStartingAgentRuntime() {
+
+                String goal = "分析劳动合同";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                AgentContext result = AgentContext.authenticated(
+                                goal,
+                                tenantContext)
+                                .toBuilder()
+                                .finalAnswer(
+                                                "法律分析")
+                                .build();
+
+                when(
+                                agentRuntime.run(
+                                                any(
+                                                                AgentContext.class)))
+                                .thenReturn(
+                                                result);
+
+                when(
+                                outputGuardrailChain.evaluate(
+                                                "法律分析"))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "outputGuardrailChain"));
+
+                service.execute(
+                                goal);
+
+                org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                                tenantAuthorizationService,
+                                tenantResourceQuotaService,
+                                agentRuntime);
+
+                inOrder.verify(
+                                tenantAuthorizationService)
+                                .authorizeAgentAccess(
+                                                tenantContext);
+
+                inOrder.verify(
+                                tenantResourceQuotaService)
+                                .acquireAgentExecution(
+                                                tenantContext);
+
+                inOrder.verify(
+                                agentRuntime)
+                                .run(
+                                                any(
+                                                                AgentContext.class));
+
+                verify(
+                                tenantQuotaLease)
+                                .close();
+        }
+
+        @SecurityTest
+        @Test
+        void shouldNotStartAgentRuntimeWhenTenantQuotaIsExceeded() {
+
+                String goal = "分析劳动合同";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                when(
+                                tenantResourceQuotaService
+                                                .acquireAgentExecution(
+                                                                tenantContext))
+                                .thenThrow(
+                                                new TenantResourceQuotaExceededException());
+
+                TenantResourceQuotaExceededException exception = assertThrows(
+                                TenantResourceQuotaExceededException.class,
+                                () -> service.execute(
+                                                goal));
+
+                assertEquals(
+                                ErrorCode.TENANT_RESOURCE_QUOTA_EXCEEDED,
+                                exception.getErrorCode());
+
+                assertEquals(
+                                HttpStatus.TOO_MANY_REQUESTS,
+                                exception.getStatus());
+
+                verify(
+                                agentRuntime,
+                                never())
+                                .run(
+                                                any(
+                                                                AgentContext.class));
+
+                verify(
+                                securityAuditLogger)
+                                .log(
+                                                argThat(
+                                                                event -> event.type() == SecurityAuditEventType.TENANT_RESOURCE_QUOTA_EXCEEDED));
+        }
+
+        @SecurityTest
+        @Test
+        void shouldReleaseTenantQuotaWhenAgentRuntimeFails() {
+
+                String goal = "分析劳动合同";
+
+                when(
+                                inputGuardrailChain.evaluate(
+                                                goal))
+                                .thenReturn(
+                                                GuardrailResult.allow(
+                                                                "inputGuardrailChain"));
+
+                when(
+                                agentRuntime.run(
+                                                any(
+                                                                AgentContext.class)))
+                                .thenThrow(
+                                                new IllegalStateException(
+                                                                "runtime failed"));
+
+                assertThrows(
+                                IllegalStateException.class,
+                                () -> service.execute(
+                                                goal));
+
+                verify(
+                                tenantQuotaLease)
+                                .close();
         }
 }

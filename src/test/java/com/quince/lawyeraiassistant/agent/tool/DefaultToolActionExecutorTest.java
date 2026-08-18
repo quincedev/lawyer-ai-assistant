@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 
 class DefaultToolActionExecutorTest {
 
@@ -90,7 +92,8 @@ class DefaultToolActionExecutorTest {
 
                 when(
                                 agentTool.execute(
-                                                action))
+                                                any(ToolExecutionContext.class),
+                                                same(action)))
                                 .thenReturn(
                                                 ToolExecutionResult.success(
                                                                 "劳动合同法第八十七条规定..."));
@@ -128,7 +131,8 @@ class DefaultToolActionExecutorTest {
                 verify(
                                 agentTool)
                                 .execute(
-                                                action);
+                                                any(ToolExecutionContext.class),
+                                                same(action));
         }
 
         @Test
@@ -140,7 +144,8 @@ class DefaultToolActionExecutorTest {
 
                 when(
                                 agentTool.execute(
-                                                action))
+                                                any(ToolExecutionContext.class),
+                                                same(action)))
                                 .thenReturn(
                                                 ToolExecutionResult.failure(
                                                                 "VectorStore unavailable"));
@@ -208,7 +213,8 @@ class DefaultToolActionExecutorTest {
 
                 when(
                                 agentTool.execute(
-                                                action))
+                                                any(ToolExecutionContext.class),
+                                                same(action)))
                                 .thenReturn(
                                                 null);
 
@@ -249,7 +255,8 @@ class DefaultToolActionExecutorTest {
 
                         when(
                                         agentTool.execute(
-                                                        action))
+                                                        any(ToolExecutionContext.class),
+                                                        same(action)))
                                         .thenAnswer(
                                                         invocation -> {
 
@@ -294,7 +301,8 @@ class DefaultToolActionExecutorTest {
 
                 when(
                                 agentTool.execute(
-                                                action))
+                                                any(ToolExecutionContext.class),
+                                                same(action)))
                                 .thenThrow(
                                                 new IllegalStateException(
                                                                 "Vector Store unavailable"));

@@ -2,9 +2,11 @@ package com.quince.lawyeraiassistant.agent.model;
 
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
+import com.quince.lawyeraiassistant.security.identity.UserRole;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -1053,5 +1055,98 @@ class AgentContextTest {
                 assertEquals(
                                 SecurityTrustLevel.UNTRUSTED,
                                 updatedSecurityContext.trustLevel());
+        }
+
+        @Test
+        void shouldCreateAuthenticatedContextWithTenantContext() {
+
+                TenantContext tenantContext = new TenantContext(
+                                "tenant-a",
+                                "user-001",
+                                "quince",
+                                Set.of(
+                                                UserRole.LAWYER));
+
+                AgentContext context = AgentContext.authenticated(
+                                "分析劳动合同",
+                                tenantContext);
+
+                assertSame(
+                                tenantContext,
+                                context.requireTenantContext());
+
+                assertEquals(
+                                "tenant-a",
+                                context.getTenantContext()
+                                                .tenantId());
+        }
+
+        @Test
+        void shouldAllowLegacyInternalContextWithoutTenantUntilRequired() {
+
+                AgentContext context = AgentContext.from(
+                                "测试目标");
+
+                assertEquals(
+                                null,
+                                context.getTenantContext());
+
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                context::requireTenantContext);
+
+                assertEquals(
+                                "TenantContext is required for authenticated Agent execution",
+                                exception.getMessage());
+        }
+
+        @Test
+        void shouldPreserveTenantContextWhenSkillContextIsAttached() {
+
+                TenantContext tenantContext = new TenantContext(
+                                "tenant-a",
+                                "user-001",
+                                "quince",
+                                Set.of(
+                                                UserRole.LAWYER));
+
+                AgentContext context = AgentContext.authenticated(
+                                "分析劳动合同",
+                                tenantContext);
+
+                SkillContext skillContext = mock(
+                                SkillContext.class);
+
+                AgentContext updated = context.withSkillContext(
+                                skillContext);
+
+                assertSame(
+                                tenantContext,
+                                updated.requireTenantContext());
+        }
+
+        @Test
+        void shouldPreserveTenantContextWhenObservationIsAppended() {
+
+                TenantContext tenantContext = new TenantContext(
+                                "tenant-a",
+                                "user-001",
+                                "quince",
+                                Set.of(
+                                                UserRole.LAWYER));
+
+                AgentContext context = AgentContext.authenticated(
+                                "分析劳动合同",
+                                tenantContext);
+
+                ToolObservation observation = mock(
+                                ToolObservation.class);
+
+                AgentContext updated = context.appendObservation(
+                                observation);
+
+                assertSame(
+                                tenantContext,
+                                updated.requireTenantContext());
         }
 }

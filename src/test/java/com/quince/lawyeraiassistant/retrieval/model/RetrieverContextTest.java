@@ -15,246 +15,288 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RetrieverContextTest {
 
-    @Test
-    void shouldCreateInitialContextFromQueryContext() {
-        QueryContext queryContext = QueryContext.from(
-                "老板把我开了合法吗？");
+        @Test
+        void shouldCreateInitialContextFromQueryContext() {
+                QueryContext queryContext = QueryContext.from(
+                                "老板把我开了合法吗？");
 
-        RetrieverContext context = RetrieverContext.from(queryContext);
+                RetrieverContext context = RetrieverContext.from(queryContext);
 
-        assertEquals(
-                queryContext,
-                context.getQueryContext());
+                assertEquals(
+                                queryContext,
+                                context.getQueryContext());
 
-        assertTrue(context.getDocuments().isEmpty());
-        assertFalse(context.hasDocuments());
-        assertEquals(0, context.documentCount());
-    }
+                assertTrue(context.getDocuments().isEmpty());
+                assertFalse(context.hasDocuments());
+                assertEquals(0, context.documentCount());
+        }
 
-    @Test
-    void shouldReturnOriginalQuestionBeforeRewrite() {
-        QueryContext queryContext = QueryContext.from(
-                "老板不给工资怎么办？");
+        @Test
+        void shouldReturnOriginalQuestionBeforeRewrite() {
+                QueryContext queryContext = QueryContext.from(
+                                "老板不给工资怎么办？");
 
-        RetrieverContext context = RetrieverContext.from(queryContext);
+                RetrieverContext context = RetrieverContext.from(queryContext);
 
-        assertEquals(
-                "老板不给工资怎么办？",
-                context.effectiveQuery());
-    }
+                assertEquals(
+                                "老板不给工资怎么办？",
+                                context.effectiveQuery());
+        }
 
-    @Test
-    void shouldReturnRewriteQueryAfterRewrite() {
-        QueryContext queryContext = QueryContext.builder()
-                .question(
-                        "老板不给工资怎么办？")
-                .rewriteQuery(
-                        "拖欠劳动报酬的法律救济")
-                .build();
+        @Test
+        void shouldReturnRewriteQueryAfterRewrite() {
+                QueryContext queryContext = QueryContext.builder()
+                                .question(
+                                                "老板不给工资怎么办？")
+                                .rewriteQuery(
+                                                "拖欠劳动报酬的法律救济")
+                                .build();
 
-        RetrieverContext context = RetrieverContext.from(queryContext);
+                RetrieverContext context = RetrieverContext.from(queryContext);
 
-        assertEquals(
-                "拖欠劳动报酬的法律救济",
-                context.effectiveQuery());
-    }
+                assertEquals(
+                                "拖欠劳动报酬的法律救济",
+                                context.effectiveQuery());
+        }
 
-    @Test
-    void shouldCreateContextWithDocuments() {
-        QueryContext queryContext = QueryContext.from(
-                "劳动合同解除需要赔偿吗？");
+        @Test
+        void shouldCreateContextWithDocuments() {
+                QueryContext queryContext = QueryContext.from(
+                                "劳动合同解除需要赔偿吗？");
 
-        Document firstDocument = new Document(
-                "劳动合同法第四十六条。");
+                Document firstDocument = new Document(
+                                "劳动合同法第四十六条。");
 
-        Document secondDocument = new Document(
-                "劳动合同法第四十七条。");
+                Document secondDocument = new Document(
+                                "劳动合同法第四十七条。");
 
-        RetrieverContext context = RetrieverContext.builder()
-                .queryContext(queryContext)
-                .documents(
-                        List.of(
+                RetrieverContext context = RetrieverContext.builder()
+                                .queryContext(queryContext)
+                                .documents(
+                                                List.of(
+                                                                firstDocument,
+                                                                secondDocument))
+                                .build();
+
+                assertTrue(context.hasDocuments());
+                assertEquals(2, context.documentCount());
+
+                assertEquals(
                                 firstDocument,
-                                secondDocument))
-                .build();
+                                context.getDocuments().get(0));
 
-        assertTrue(context.hasDocuments());
-        assertEquals(2, context.documentCount());
+                assertEquals(
+                                secondDocument,
+                                context.getDocuments().get(1));
+        }
 
-        assertEquals(
-                firstDocument,
-                context.getDocuments().get(0));
+        @Test
+        void shouldNormalizeNullDocumentsToEmptyList() {
+                QueryContext queryContext = QueryContext.from(
+                                "劳动合同问题");
 
-        assertEquals(
-                secondDocument,
-                context.getDocuments().get(1));
-    }
+                RetrieverContext context = RetrieverContext.builder()
+                                .queryContext(queryContext)
+                                .documents(null)
+                                .build();
 
-    @Test
-    void shouldNormalizeNullDocumentsToEmptyList() {
-        QueryContext queryContext = QueryContext.from(
-                "劳动合同问题");
+                assertTrue(context.getDocuments().isEmpty());
+                assertFalse(context.hasDocuments());
+                assertEquals(0, context.documentCount());
+        }
 
-        RetrieverContext context = RetrieverContext.builder()
-                .queryContext(queryContext)
-                .documents(null)
-                .build();
+        @Test
+        void shouldCreateNewContextWhenAddingDocuments() {
+                QueryContext queryContext = QueryContext.from(
+                                "竞业协议合法吗？");
 
-        assertTrue(context.getDocuments().isEmpty());
-        assertFalse(context.hasDocuments());
-        assertEquals(0, context.documentCount());
-    }
+                RetrieverContext originalContext = RetrieverContext.from(queryContext);
 
-    @Test
-    void shouldCreateNewContextWhenAddingDocuments() {
-        QueryContext queryContext = QueryContext.from(
-                "竞业协议合法吗？");
+                Document document = new Document(
+                                "劳动合同法第二十三条。");
 
-        RetrieverContext originalContext = RetrieverContext.from(queryContext);
+                RetrieverContext retrievedContext = originalContext.toBuilder()
+                                .documents(
+                                                List.of(document))
+                                .build();
 
-        Document document = new Document(
-                "劳动合同法第二十三条。");
+                assertNotSame(
+                                originalContext,
+                                retrievedContext);
 
-        RetrieverContext retrievedContext = originalContext.toBuilder()
-                .documents(
-                        List.of(document))
-                .build();
+                assertFalse(originalContext.hasDocuments());
+                assertEquals(0, originalContext.documentCount());
 
-        assertNotSame(
-                originalContext,
-                retrievedContext);
+                assertTrue(retrievedContext.hasDocuments());
+                assertEquals(1, retrievedContext.documentCount());
+        }
 
-        assertFalse(originalContext.hasDocuments());
-        assertEquals(0, originalContext.documentCount());
+        @Test
+        void shouldPreserveQueryContextWhenAddingDocuments() {
+                QueryContext queryContext = QueryContext.from(
+                                "那赔偿呢？",
+                                "conversation-001");
 
-        assertTrue(retrievedContext.hasDocuments());
-        assertEquals(1, retrievedContext.documentCount());
-    }
+                RetrieverContext originalContext = RetrieverContext.from(queryContext);
 
-    @Test
-    void shouldPreserveQueryContextWhenAddingDocuments() {
-        QueryContext queryContext = QueryContext.from(
-                "那赔偿呢？",
-                "conversation-001");
+                RetrieverContext retrievedContext = originalContext.toBuilder()
+                                .documents(
+                                                List.of(
+                                                                new Document(
+                                                                                "经济补偿相关规定。")))
+                                .build();
 
-        RetrieverContext originalContext = RetrieverContext.from(queryContext);
+                assertEquals(
+                                queryContext,
+                                retrievedContext.getQueryContext());
 
-        RetrieverContext retrievedContext = originalContext.toBuilder()
-                .documents(
-                        List.of(
+                assertEquals(
+                                "conversation-001",
+                                retrievedContext
+                                                .getQueryContext()
+                                                .getConversationId());
+        }
+
+        @Test
+        void shouldCreateDefensiveCopyOfDocuments() {
+                QueryContext queryContext = QueryContext.from(
+                                "劳动合同到期怎么办？");
+
+                List<Document> mutableDocuments = new ArrayList<>();
+
+                mutableDocuments.add(
                                 new Document(
-                                        "经济补偿相关规定。")))
-                .build();
+                                                "劳动合同终止相关规定。"));
 
-        assertEquals(
-                queryContext,
-                retrievedContext.getQueryContext());
+                RetrieverContext context = RetrieverContext.builder()
+                                .queryContext(queryContext)
+                                .documents(mutableDocuments)
+                                .build();
 
-        assertEquals(
-                "conversation-001",
-                retrievedContext
-                        .getQueryContext()
-                        .getConversationId());
-    }
+                mutableDocuments.clear();
 
-    @Test
-    void shouldCreateDefensiveCopyOfDocuments() {
-        QueryContext queryContext = QueryContext.from(
-                "劳动合同到期怎么办？");
+                assertEquals(1, context.documentCount());
+                assertTrue(context.hasDocuments());
+        }
 
-        List<Document> mutableDocuments = new ArrayList<>();
+        @Test
+        void shouldExposeUnmodifiableDocumentList() {
+                RetrieverContext context = RetrieverContext.builder()
+                                .queryContext(
+                                                QueryContext.from(
+                                                                "测试问题"))
+                                .documents(
+                                                List.of(
+                                                                new Document(
+                                                                                "测试知识")))
+                                .build();
 
-        mutableDocuments.add(
-                new Document(
-                        "劳动合同终止相关规定。"));
+                assertThrows(
+                                UnsupportedOperationException.class,
+                                () -> context
+                                                .getDocuments()
+                                                .add(
+                                                                new Document(
+                                                                                "非法新增知识")));
+        }
 
-        RetrieverContext context = RetrieverContext.builder()
-                .queryContext(queryContext)
-                .documents(mutableDocuments)
-                .build();
+        @Test
+        void shouldRejectNullDocumentElement() {
+                List<Document> documents = new ArrayList<>();
 
-        mutableDocuments.clear();
-
-        assertEquals(1, context.documentCount());
-        assertTrue(context.hasDocuments());
-    }
-
-    @Test
-    void shouldExposeUnmodifiableDocumentList() {
-        RetrieverContext context = RetrieverContext.builder()
-                .queryContext(
-                        QueryContext.from(
-                                "测试问题"))
-                .documents(
-                        List.of(
+                documents.add(
                                 new Document(
-                                        "测试知识")))
-                .build();
+                                                "有效知识"));
 
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> context
-                        .getDocuments()
-                        .add(
-                                new Document(
-                                        "非法新增知识")));
-    }
+                documents.add(null);
 
-    @Test
-    void shouldRejectNullDocumentElement() {
-        List<Document> documents = new ArrayList<>();
+                assertThrows(
+                                NullPointerException.class,
+                                () -> RetrieverContext.builder()
+                                                .queryContext(
+                                                                QueryContext.from(
+                                                                                "测试问题"))
+                                                .documents(documents)
+                                                .build());
+        }
 
-        documents.add(
-                new Document(
-                        "有效知识"));
+        @Test
+        void shouldThrowExceptionWhenQueryContextIsNull() {
+                NullPointerException exception = assertThrows(
+                                NullPointerException.class,
+                                () -> RetrieverContext.from(null));
 
-        documents.add(null);
+                assertEquals(
+                                "QueryContext must not be null",
+                                exception.getMessage());
+        }
 
-        assertThrows(
-                NullPointerException.class,
-                () -> RetrieverContext.builder()
-                        .queryContext(
+        @Test
+        void shouldSupportEqualsAndHashCode() {
+                QueryContext queryContext = QueryContext.from(
+                                "劳动合同解除是否合法？");
+
+                Document document = new Document(
+                                "劳动合同解除相关规定。");
+
+                RetrieverContext first = RetrieverContext.builder()
+                                .queryContext(queryContext)
+                                .documents(
+                                                List.of(document))
+                                .build();
+
+                RetrieverContext second = RetrieverContext.builder()
+                                .queryContext(queryContext)
+                                .documents(
+                                                List.of(document))
+                                .build();
+
+                assertEquals(first, second);
+
+                assertEquals(
+                                first.hashCode(),
+                                second.hashCode());
+        }
+
+        @Test
+        void shouldCreateTenantAwareRetrieverContext() {
+
+                RetrieverContext context = RetrieverContext.tenantAware(
                                 QueryContext.from(
-                                        "测试问题"))
-                        .documents(documents)
-                        .build());
-    }
+                                                "劳动合同问题"),
+                                " tenant-a ");
 
-    @Test
-    void shouldThrowExceptionWhenQueryContextIsNull() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> RetrieverContext.from(null));
+                assertTrue(
+                                context.hasTenantId());
 
-        assertEquals(
-                "QueryContext must not be null",
-                exception.getMessage());
-    }
+                assertEquals(
+                                "tenant-a",
+                                context.requireTenantId());
+        }
 
-    @Test
-    void shouldSupportEqualsAndHashCode() {
-        QueryContext queryContext = QueryContext.from(
-                "劳动合同解除是否合法？");
+        @Test
+        void shouldRejectBlankTenantIdForTenantAwareContext() {
 
-        Document document = new Document(
-                "劳动合同解除相关规定。");
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> RetrieverContext.tenantAware(
+                                                QueryContext.from(
+                                                                "劳动合同问题"),
+                                                " "));
+        }
 
-        RetrieverContext first = RetrieverContext.builder()
-                .queryContext(queryContext)
-                .documents(
-                        List.of(document))
-                .build();
+        @Test
+        void shouldFailWhenTenantIdIsRequiredFromLegacyContext() {
 
-        RetrieverContext second = RetrieverContext.builder()
-                .queryContext(queryContext)
-                .documents(
-                        List.of(document))
-                .build();
+                RetrieverContext context = RetrieverContext.from(
+                                QueryContext.from(
+                                                "劳动合同问题"));
 
-        assertEquals(first, second);
+                assertFalse(
+                                context.hasTenantId());
 
-        assertEquals(
-                first.hashCode(),
-                second.hashCode());
-    }
+                assertThrows(
+                                IllegalStateException.class,
+                                context::requireTenantId);
+        }
 }

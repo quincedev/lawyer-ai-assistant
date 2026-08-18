@@ -8,6 +8,12 @@ public enum ErrorCode {
 
     INVALID_ARGUMENT,
 
+    AUTHENTICATION_FAILED,
+
+    TENANT_ACCESS_DENIED,
+
+    TENANT_RESOURCE_QUOTA_EXCEEDED,
+
     /*
      * =====================================================
      * AI / Agent Security

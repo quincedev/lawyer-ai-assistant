@@ -3,6 +3,7 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.tool.AgentTool;
+import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
@@ -75,6 +76,20 @@ public class LegalKnowledgeTool
         public ToolExecutionResult execute(
                         ToolAction action) {
 
+                return execute(
+                                ToolExecutionContext.sharedOnly(),
+                                action);
+        }
+
+        @Override
+        public ToolExecutionResult execute(
+                        ToolExecutionContext executionContext,
+                        ToolAction action) {
+
+                Objects.requireNonNull(
+                                executionContext,
+                                "ToolExecutionContext must not be null");
+
                 Objects.requireNonNull(
                                 action,
                                 "ToolAction must not be null");
@@ -87,8 +102,29 @@ public class LegalKnowledgeTool
 
                 try {
 
-                        RetrieverContext retrievalContext = retrievalOrchestrator.retrieve(
-                                        legalQuestion);
+                        RetrieverContext retrievalContext;
+
+                        if (executionContext.hasTenantContext()) {
+
+                                String tenantId = executionContext
+                                                .requireTenantContext()
+                                                .tenantId();
+
+                                retrievalContext = retrievalOrchestrator
+                                                .retrieveForTenant(
+                                                                legalQuestion,
+                                                                tenantId);
+
+                        } else {
+
+                                /*
+                                 * Legacy/internal call:
+                                 * Step 5 guarantees retrieve(...)
+                                 * is SHARED-only.
+                                 */
+                                retrievalContext = retrievalOrchestrator.retrieve(
+                                                legalQuestion);
+                        }
 
                         Objects.requireNonNull(
                                         retrievalContext,

@@ -4,6 +4,7 @@ import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.AgentSkillRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.ai.chat.client.ChatClient;
@@ -17,7 +18,6 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -201,8 +201,8 @@ class SpringAiAgentSkillSelectorTest {
 
         when(
                 requestSpec.user(
-                        any(
-                                Consumer.class)))
+                        ArgumentMatchers
+                                .<Consumer<ChatClient.PromptUserSpec>>any()))
                 .thenReturn(
                         requestSpec);
 
