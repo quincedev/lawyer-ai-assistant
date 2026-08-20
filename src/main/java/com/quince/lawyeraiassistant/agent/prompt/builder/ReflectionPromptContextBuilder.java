@@ -3,6 +3,7 @@ package com.quince.lawyeraiassistant.agent.prompt.builder;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
+import com.quince.lawyeraiassistant.agent.prompt.config.AgentPromptWindowProperties;
 import com.quince.lawyeraiassistant.agent.prompt.model.ReflectionPromptContext;
 import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
 
@@ -24,12 +25,19 @@ public class ReflectionPromptContextBuilder {
 
         private final LegalEvidencePromptFormatter evidencePromptFormatter;
 
+        private final AgentPromptWindowProperties promptWindowProperties;
+
         public ReflectionPromptContextBuilder(
-                        LegalEvidencePromptFormatter evidencePromptFormatter) {
+                        LegalEvidencePromptFormatter evidencePromptFormatter,
+                        AgentPromptWindowProperties promptWindowProperties) {
 
                 this.evidencePromptFormatter = Objects.requireNonNull(
                                 evidencePromptFormatter,
                                 "LegalEvidencePromptFormatter must not be null");
+
+                this.promptWindowProperties = Objects.requireNonNull(
+                                promptWindowProperties,
+                                "promptWindowProperties must not be null");
         }
 
         public ReflectionPromptContext build(
@@ -53,7 +61,8 @@ public class ReflectionPromptContextBuilder {
                                 context);
 
                 String observations = formatObservations(
-                                context);
+                                context,
+                                task);
 
                 return new ReflectionPromptContext(
                                 context.getGoal(),
@@ -89,18 +98,32 @@ public class ReflectionPromptContextBuilder {
         }
 
         private String formatObservations(
-                        AgentContext context) {
+                        AgentContext context,
+                        AgentTask currentTask) {
 
                 String toolObservations = context.getObservations()
                                 .stream()
+                                .filter(
+                                                observation -> currentTask
+                                                                .getId()
+                                                                .equals(
+                                                                                observation.getTaskId()))
                                 .map(
-                                                evidencePromptFormatter::format)
+                                                observation -> evidencePromptFormatter.format(
+                                                                observation,
+                                                                promptWindowProperties
+                                                                                .getMaxEvidenceChars()))
                                 .collect(
                                                 Collectors.joining(
                                                                 "\n\n---\n\n"));
 
                 String runtimeReasonObservations = context.getRuntimeReasonObservations()
                                 .stream()
+                                .filter(
+                                                observation -> currentTask
+                                                                .getId()
+                                                                .equals(
+                                                                                observation.getTaskId()))
                                 .map(
                                                 this::formatRuntimeReasonObservation)
                                 .collect(
@@ -114,10 +137,12 @@ public class ReflectionPromptContextBuilder {
                 }
 
                 if (toolObservations.isBlank()) {
+
                         return runtimeReasonObservations;
                 }
 
                 if (runtimeReasonObservations.isBlank()) {
+
                         return toolObservations;
                 }
 

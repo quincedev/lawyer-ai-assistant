@@ -2,6 +2,12 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 
 import com.quince.lawyeraiassistant.agent.tool.AgentTool;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
+import com.quince.lawyeraiassistant.agent.tool.legal.evidence.LegalEvidenceCompactor;
+import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
+import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
+import com.quince.lawyeraiassistant.cache.tool.ToolCachePolicy;
+import com.quince.lawyeraiassistant.cache.tool.ToolResultCache;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -45,6 +51,9 @@ class LegalToolModeRegistrationTest {
          * 所以这里直接注册一个 mock Bean。
          */
         private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+                        .withBean(
+                                        AgentPerformanceContext.class,
+                                        AgentPerformanceContext::new)
                         .withBean(
                                         SecurityAuditLogger.class,
                                         () -> mock(
@@ -227,6 +236,39 @@ class LegalToolModeRegistrationTest {
                 McpTenantExecutionTokenService mcpTenantExecutionTokenService() {
 
                         return mock(McpTenantExecutionTokenService.class);
+                }
+
+                @Bean
+                ToolResultCache toolResultCache() {
+
+                        return mock(ToolResultCache.class);
+                }
+
+                @Bean
+                ToolCachePolicy toolCachePolicy() {
+
+                        return new ToolCachePolicy();
+                }
+
+                @Bean
+                CacheKeyFactory cacheKeyFactory(
+                                ObjectMapper objectMapper) {
+
+                        return new CacheKeyFactory(objectMapper);
+                }
+
+                @Bean
+                AiCacheProperties cacheProperties() {
+
+                        AiCacheProperties properties = new AiCacheProperties();
+                        properties.setEnabled(false);
+                        return properties;
+                }
+
+                @Bean
+                LegalEvidenceCompactor legalEvidenceCompactor() {
+
+                        return content -> content;
                 }
 
                 @Bean

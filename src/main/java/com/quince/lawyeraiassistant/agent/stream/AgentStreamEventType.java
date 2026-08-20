@@ -1,0 +1,32 @@
+package com.quince.lawyeraiassistant.agent.stream;
+
+public enum AgentStreamEventType {
+
+    AGENT_STARTED,
+
+    PLANNING_STARTED,
+
+    PLANNING_COMPLETED,
+
+    TASK_STARTED,
+
+    REASONING_STARTED,
+
+    REASONING_COMPLETED,
+
+    TOOL_STARTED,
+
+    TOOL_COMPLETED,
+
+    REFLECTION_STARTED,
+
+    REFLECTION_COMPLETED,
+
+    FINAL_ANSWER_STARTED,
+
+    ANSWER_DELTA,
+
+    AGENT_COMPLETED,
+
+    AGENT_FAILED
+}

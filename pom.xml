@@ -221,6 +221,20 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- ========================================================= -->
+		<!-- AI Local Cache / Caffeine                                  -->
+		<!-- ========================================================= -->
+
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+
 	</dependencies>
 
 	<!-- ===================================================== -->

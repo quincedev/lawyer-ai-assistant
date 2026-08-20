@@ -55,6 +55,23 @@ spring:
 # Application Configuration
 # =============================================================
 app:
+  cache:
+    enabled: true
+
+    # Knowledge Base 内容变化时升级版本。
+    # 例如：
+    # v1 → v2
+    knowledge-version: v1
+
+    retrieval:
+      enabled: true
+      maximum-size: 1000
+      ttl: 30m
+
+    tool:
+      enabled: true
+      maximum-size: 1000
+      ttl: 30m
   # ===========================================================
   # Agent Tool Mode
   #
@@ -66,6 +83,43 @@ app:
   # ===========================================================
   agent:
     legal-tool-mode: local
+
+    prompt-window:
+      max-historical-observations: 1
+      max-evidence-chars: 4000
+
+    legal-evidence-compaction:
+      enabled: true
+      max-chars: 8000
+      max-section-chars: 1800
+      max-sections: 4
+    
+    performance-guardrail:
+      warn-llm-calls: 12
+      critical-llm-calls: 15
+
+      warn-tool-calls: 4
+      max-tool-calls: 6
+
+      warn-retries: 2
+      max-retries: 3
+
+      warn-replans: 1
+      max-replans: 2
+
+      warn-steps: 12
+      max-steps: 16
+
+      warn-total-duration-ms: 120000
+      critical-total-duration-ms: 180000
+
+      warn-llm-duration-ms: 120000
+      warn-llm-ratio: 0.95
+
+      warn-no-progress-suppressions: 1
+      critical-no-progress-suppressions: 2
+
+      warn-low-cache-hit-ratio: 0.20
 
   tenant:
     quota:
@@ -179,8 +233,9 @@ management:
       exposure:
         include:
           - health
+          - info
           - metrics
 
   endpoint:
     health:
-      show-details: never
+      show-details: when-authorized

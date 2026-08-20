@@ -1,10 +1,13 @@
 package com.quince.lawyeraiassistant.agent.action;
 
+import com.quince.lawyeraiassistant.agent.action.policy.EvidenceAwareActionPolicy;
 import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionDecision;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
+import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.prompt.config.AgentPromptWindowProperties;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
@@ -23,6 +26,8 @@ import java.util.stream.Collectors;
 public class SpringAiAgentActionSelector
                 implements AgentActionSelector {
 
+        private final EvidenceAwareActionPolicy evidenceAwareActionPolicy;
+
         private final LegalEvidencePromptFormatter evidencePromptFormatter;
 
         private final ChatClient chatClient;
@@ -35,12 +40,16 @@ public class SpringAiAgentActionSelector
 
         private final SkillToolScope skillToolScope;
 
+        private final AgentPromptWindowProperties promptWindowProperties;
+
         public SpringAiAgentActionSelector(
                         ChatClient.Builder chatClientBuilder,
                         AgentActionDecisionMapper decisionMapper,
                         AgentToolRegistry toolRegistry,
                         SkillToolScope skillToolScope,
                         LegalEvidencePromptFormatter evidencePromptFormatter,
+                        AgentPromptWindowProperties promptWindowProperties,
+                        EvidenceAwareActionPolicy evidenceAwareActionPolicy,
                         @Value("classpath:/prompts/agent/action-selection.st") Resource actionSelectionPrompt) {
 
                 this.chatClient = Objects.requireNonNull(
@@ -67,6 +76,14 @@ public class SpringAiAgentActionSelector
                 this.evidencePromptFormatter = Objects.requireNonNull(
                                 evidencePromptFormatter,
                                 "LegalEvidencePromptFormatter must not be null");
+
+                this.promptWindowProperties = Objects.requireNonNull(
+                                promptWindowProperties,
+                                "promptWindowProperties must not be null");
+
+                this.evidenceAwareActionPolicy = Objects.requireNonNull(
+                                evidenceAwareActionPolicy,
+                                "evidenceAwareActionPolicy must not be null");
         }
 
         @Override
@@ -81,6 +98,10 @@ public class SpringAiAgentActionSelector
                 Objects.requireNonNull(
                                 task,
                                 "AgentTask must not be null");
+
+                String actionPolicyHint = resolveActionPolicyHint(
+                                context,
+                                task);
 
                 AgentActionDecision decision = chatClient
                                 .prompt()
@@ -104,7 +125,8 @@ public class SpringAiAgentActionSelector
                                                                 .param(
                                                                                 "observations",
                                                                                 resolveObservations(
-                                                                                                context))
+                                                                                                context,
+                                                                                                task))
                                                                 .param(
                                                                                 "availableTools",
                                                                                 resolveAvailableTools(
@@ -116,7 +138,10 @@ public class SpringAiAgentActionSelector
                                                                 .param(
                                                                                 "skillInstructions",
                                                                                 resolveSkillInstructions(
-                                                                                                context)))
+                                                                                                context))
+                                                                .param(
+                                                                                "actionPolicyHint",
+                                                                                actionPolicyHint))
                                 .call()
                                 .entity(
                                                 AgentActionDecision.class);
@@ -139,18 +164,41 @@ public class SpringAiAgentActionSelector
         }
 
         private String resolveObservations(
-                        AgentContext context) {
+                        AgentContext context,
+                        AgentTask currentTask) {
 
-                String toolObservations = context.getObservations()
+                List<ToolObservation> historical = latestHistoricalObservations(
+                                context,
+                                currentTask);
+
+                List<ToolObservation> current = context.getObservations()
                                 .stream()
+                                .filter(
+                                                observation -> currentTask
+                                                                .getId()
+                                                                .equals(
+                                                                                observation.getTaskId()))
+                                .toList();
+
+                String toolObservations = java.util.stream.Stream.concat(
+                                historical.stream(),
+                                current.stream())
                                 .map(
-                                                evidencePromptFormatter::format)
+                                                observation -> evidencePromptFormatter.format(
+                                                                observation,
+                                                                promptWindowProperties
+                                                                                .getMaxEvidenceChars()))
                                 .collect(
                                                 Collectors.joining(
                                                                 "\n\n"));
 
                 String runtimeReasons = context.getRuntimeReasonObservations()
                                 .stream()
+                                .filter(
+                                                observation -> currentTask
+                                                                .getId()
+                                                                .equals(
+                                                                                observation.getTaskId()))
                                 .map(
                                                 this::formatRuntimeReasonObservation)
                                 .collect(
@@ -216,5 +264,63 @@ public class SpringAiAgentActionSelector
                                                 SkillContext::getInstructions)
                                 .orElse(
                                                 "无");
+        }
+
+        private List<ToolObservation> latestHistoricalObservations(
+                        AgentContext context,
+                        AgentTask currentTask) {
+
+                List<ToolObservation> historical = context.getObservations()
+                                .stream()
+                                .filter(
+                                                observation -> !currentTask
+                                                                .getId()
+                                                                .equals(
+                                                                                observation.getTaskId()))
+                                .toList();
+
+                int limit = promptWindowProperties
+                                .getMaxHistoricalObservations();
+
+                if (limit == 0
+                                || historical.isEmpty()) {
+
+                        return List.of();
+                }
+
+                int fromIndex = Math.max(
+                                0,
+                                historical.size() - limit);
+
+                return historical.subList(
+                                fromIndex,
+                                historical.size());
+        }
+
+        private String resolveActionPolicyHint(
+                        AgentContext context,
+                        AgentTask task) {
+
+                if (evidenceAwareActionPolicy
+                                .shouldPreferReason(
+                                                context,
+                                                task)) {
+
+                        return """
+                                        当前 Task 属于分析、归纳、总结或推理类任务，
+                                        且 AgentContext 中已经存在成功的外部 Evidence。
+
+                                        本任务应优先使用 REASON,
+                                        基于已有 Evidence 完成分析，
+                                        不应为了重复获取相同资料再次调用 Tool。
+                                        """
+                                        .trim();
+                }
+
+                return """
+                                根据当前 Task 的真实需要，
+                                在 REASON 与可用 Tool 之间选择最合适的 Action。
+                                """
+                                .trim();
         }
 }

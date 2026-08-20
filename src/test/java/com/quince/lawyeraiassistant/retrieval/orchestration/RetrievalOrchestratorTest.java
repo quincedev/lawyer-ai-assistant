@@ -1,5 +1,10 @@
 package com.quince.lawyeraiassistant.retrieval.orchestration;
 
+import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
+import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
+import com.quince.lawyeraiassistant.cache.retrieval.CaffeineRetrievalCache;
+import com.quince.lawyeraiassistant.cache.retrieval.RetrievalCache;
+import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
 import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.query.pipeline.QueryPipeline;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
@@ -9,13 +14,17 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
 
+import java.time.Duration;
 import java.util.List;
+
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,12 +36,35 @@ class RetrievalOrchestratorTest {
 
         private RetrievalOrchestrator orchestrator;
 
+        private RetrievalCache retrievalCache;
+
+        private CacheKeyFactory cacheKeyFactory;
+
+        private AiCacheProperties cacheProperties;
+
+        private RetrievalProperties retrievalProperties;
+
         @BeforeEach
         void setUp() {
                 queryPipeline = mock(QueryPipeline.class);
                 retrieverPipeline = mock(RetrieverPipeline.class);
 
-                orchestrator = new RetrievalOrchestrator(
+                retrievalCache = new CaffeineRetrievalCache(
+                                100,
+                                Duration.ofMinutes(30));
+
+                cacheKeyFactory = new CacheKeyFactory(
+                                new ObjectMapper());
+
+                cacheProperties = new AiCacheProperties();
+                cacheProperties.setEnabled(true);
+                cacheProperties.setKnowledgeVersion("v1");
+
+                retrievalProperties = new RetrievalProperties(
+                                5,
+                                0.0);
+
+                orchestrator = newOrchestrator(
                                 queryPipeline,
                                 retrieverPipeline);
         }
@@ -347,7 +379,7 @@ class RetrievalOrchestratorTest {
         void shouldRejectNullConstructorDependencies() {
                 NullPointerException queryPipelineException = assertThrows(
                                 NullPointerException.class,
-                                () -> new RetrievalOrchestrator(
+                                () -> newOrchestrator(
                                                 null,
                                                 retrieverPipeline));
 
@@ -357,13 +389,69 @@ class RetrievalOrchestratorTest {
 
                 NullPointerException retrieverPipelineException = assertThrows(
                                 NullPointerException.class,
-                                () -> new RetrievalOrchestrator(
+                                () -> newOrchestrator(
                                                 queryPipeline,
                                                 null));
 
                 assertEquals(
                                 "retrieverPipeline must not be null",
                                 retrieverPipelineException.getMessage());
+
+                NullPointerException retrievalCacheException = assertThrows(
+                                NullPointerException.class,
+                                () -> new RetrievalOrchestrator(
+                                                queryPipeline,
+                                                retrieverPipeline,
+                                                null,
+                                                cacheKeyFactory,
+                                                cacheProperties,
+                                                retrievalProperties));
+
+                assertEquals(
+                                "retrievalCache must not be null",
+                                retrievalCacheException.getMessage());
+
+                NullPointerException cacheKeyFactoryException = assertThrows(
+                                NullPointerException.class,
+                                () -> new RetrievalOrchestrator(
+                                                queryPipeline,
+                                                retrieverPipeline,
+                                                retrievalCache,
+                                                null,
+                                                cacheProperties,
+                                                retrievalProperties));
+
+                assertEquals(
+                                "cacheKeyFactory must not be null",
+                                cacheKeyFactoryException.getMessage());
+
+                NullPointerException cachePropertiesException = assertThrows(
+                                NullPointerException.class,
+                                () -> new RetrievalOrchestrator(
+                                                queryPipeline,
+                                                retrieverPipeline,
+                                                retrievalCache,
+                                                cacheKeyFactory,
+                                                null,
+                                                retrievalProperties));
+
+                assertEquals(
+                                "cacheProperties must not be null",
+                                cachePropertiesException.getMessage());
+
+                NullPointerException retrievalPropertiesException = assertThrows(
+                                NullPointerException.class,
+                                () -> new RetrievalOrchestrator(
+                                                queryPipeline,
+                                                retrieverPipeline,
+                                                retrievalCache,
+                                                cacheKeyFactory,
+                                                cacheProperties,
+                                                null));
+
+                assertEquals(
+                                "retrievalProperties must not be null",
+                                retrievalPropertiesException.getMessage());
         }
 
         @Test
@@ -408,5 +496,192 @@ class RetrievalOrchestratorTest {
                                 "tenant-a",
                                 context.requireTenantId());
         }
-        
+
+        @Test
+        void shouldReuseRetrievalCacheForSameTenantAndQuery() {
+
+                QueryContext transformed = QueryContext.builder()
+                                .question("劳动合同解除")
+                                .rewriteQuery("劳动合同解除法定条件")
+                                .build();
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                RetrieverContext retrieved = RetrieverContext.builder()
+                                .queryContext(transformed)
+                                .tenantId("tenant-a")
+                                .documents(List.of(new Document("劳动合同法第三十九条")))
+                                .build();
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenReturn(retrieved);
+
+                RetrieverContext first = orchestrator.retrieveForTenant(
+                                "劳动合同解除",
+                                "tenant-a");
+
+                RetrieverContext second = orchestrator.retrieveForTenant(
+                                "劳动合同解除",
+                                "tenant-a");
+
+                verify(retrieverPipeline, times(1))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+
+                assertEquals(1, first.documentCount());
+                assertEquals(1, second.documentCount());
+                assertEquals("tenant-a", second.requireTenantId());
+        }
+
+        @Test
+        void shouldNotReuseTenantACacheForTenantB() {
+
+                QueryContext transformed = QueryContext.builder()
+                                .question("劳动合同解除")
+                                .rewriteQuery("劳动合同解除法定条件")
+                                .build();
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenAnswer(invocation -> {
+                                        RetrieverContext input = invocation.getArgument(0);
+                                        return input.toBuilder()
+                                                        .documents(List.of(new Document("tenant-specific-result")))
+                                                        .build();
+                                });
+
+                orchestrator.retrieveForTenant(
+                                "劳动合同解除",
+                                "tenant-a");
+
+                orchestrator.retrieveForTenant(
+                                "劳动合同解除",
+                                "tenant-b");
+
+                verify(retrieverPipeline, times(2))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+        }
+
+        @Test
+        void shouldReuseSharedCacheAcrossCalls() {
+
+                QueryContext transformed = QueryContext.builder()
+                                .question("劳动合同解除")
+                                .rewriteQuery("劳动合同解除法定条件")
+                                .build();
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                RetrieverContext retrieved = RetrieverContext.builder()
+                                .queryContext(transformed)
+                                .documents(List.of(new Document("shared-result")))
+                                .build();
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenReturn(retrieved);
+
+                orchestrator.retrieve("劳动合同解除");
+                orchestrator.retrieve("劳动合同解除");
+
+                verify(retrieverPipeline, times(1))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+        }
+
+        @Test
+        void shouldBypassRetrievalCacheWhenCacheIsDisabled() {
+
+                cacheProperties.setEnabled(false);
+
+                QueryContext transformed = QueryContext.from(
+                                "劳动合同解除");
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                orchestrator.retrieve("劳动合同解除");
+                orchestrator.retrieve("劳动合同解除");
+
+                verify(retrieverPipeline, times(2))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+        }
+
+        @Test
+        void shouldNotCacheEmptyRetrievalResult() {
+
+                QueryContext transformed = QueryContext.from(
+                                "劳动合同解除");
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                orchestrator.retrieve("劳动合同解除");
+                orchestrator.retrieve("劳动合同解除");
+
+                verify(retrieverPipeline, times(2))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+        }
+
+        @Test
+        void shouldMissCacheWhenKnowledgeVersionChanges() {
+
+                QueryContext transformed = QueryContext.builder()
+                                .question("劳动合同解除")
+                                .rewriteQuery("劳动合同解除法定条件")
+                                .build();
+
+                when(queryPipeline.execute(
+                                org.mockito.ArgumentMatchers.any(QueryContext.class)))
+                                .thenReturn(transformed);
+
+                when(retrieverPipeline.retrieve(
+                                org.mockito.ArgumentMatchers.any(RetrieverContext.class)))
+                                .thenAnswer(invocation -> {
+                                        RetrieverContext input = invocation.getArgument(0);
+                                        return input.toBuilder()
+                                                        .documents(List.of(new Document("result")))
+                                                        .build();
+                                });
+
+                orchestrator.retrieve("劳动合同解除");
+
+                cacheProperties.setKnowledgeVersion("v2");
+
+                orchestrator.retrieve("劳动合同解除");
+
+                verify(retrieverPipeline, times(2))
+                                .retrieve(org.mockito.ArgumentMatchers.any(RetrieverContext.class));
+        }
+
+        private RetrievalOrchestrator newOrchestrator(
+                        QueryPipeline queryPipeline,
+                        RetrieverPipeline retrieverPipeline) {
+
+                return new RetrievalOrchestrator(
+                                queryPipeline,
+                                retrieverPipeline,
+                                retrievalCache,
+                                cacheKeyFactory,
+                                cacheProperties,
+                                retrievalProperties);
+        }
+
 }

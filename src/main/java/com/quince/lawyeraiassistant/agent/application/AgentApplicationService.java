@@ -1,6 +1,8 @@
 package com.quince.lawyeraiassistant.agent.application;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamPublisher;
+import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
 /**
  * Application boundary for executing Agent requests.
@@ -14,12 +16,21 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
  */
 public interface AgentApplicationService {
 
-    /**
-     * Executes an Agent request for the given goal.
-     *
-     * @param goal user/application goal
-     * @return final AgentContext
-     */
-    AgentContext execute(
-            String goal);
+        /**
+         * Executes an Agent request for the given goal.
+         *
+         * @param goal user/application goal
+         * @return final AgentContext
+         */
+        AgentContext execute(
+                        String goal);
+
+        AgentContext executeStreaming(
+                        String goal,
+                        AgentStreamPublisher publisher);
+
+        AgentContext executeStreaming(
+                        String goal,
+                        TenantContext tenantContext,
+                        AgentStreamPublisher publisher);
 }

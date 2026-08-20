@@ -39,6 +39,10 @@ Task Description：
 
 {availableTools}
 
+Action Policy：
+
+{actionPolicyHint}
+
 你可以选择以下 Action Type：
 
 1. TOOL
@@ -156,4 +160,18 @@ Tool Scope 规则：
 
 13. 你的职责仅生成下一步 Action Decision；
 
-14. 返回结果必须符合系统要求的结构化输出格式。
+14. 返回结果必须符合系统要求的结构化输出格式;
+
+16. 如果当前 Task 的主要职责是分析、归纳、总结、比较、区分、
+    推理或形成结论，并且上下文中已经存在足够的成功 Evidence，
+    应优先选择 REASON。
+
+17. 不得仅因为当前 Agent 具有 Tool 能力，
+    就机械地为每个 Task 调用 Tool。
+
+18. 如果已有 Evidence 已经覆盖当前 Task 所需事实基础，
+    后续分析型 Task 应直接基于 Evidence 推理，
+    不应重复执行相同检索。
+
+19. Tool 用于获取尚未掌握的外部事实或资料；
+    REASON 用于处理、分析和总结已经掌握的信息。

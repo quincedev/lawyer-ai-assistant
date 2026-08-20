@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * AgentFinalAnswerService 默认实现。
@@ -21,58 +22,112 @@ import java.util.Objects;
  */
 @Service
 public class DefaultAgentFinalAnswerService
-        implements AgentFinalAnswerService {
+                implements AgentFinalAnswerService {
 
-    private final ChatClient chatClient;
+        private final ChatClient chatClient;
 
-    private final PromptBuilder promptBuilder;
+        private final PromptBuilder promptBuilder;
 
-    private final FinalAnswerPromptContextBuilder promptContextBuilder;
+        private final FinalAnswerPromptContextBuilder promptContextBuilder;
 
-    public DefaultAgentFinalAnswerService(
-            @Qualifier("agentFinalAnswerChatClient") ChatClient chatClient,
-            PromptBuilder promptBuilder,
-            FinalAnswerPromptContextBuilder promptContextBuilder) {
+        public DefaultAgentFinalAnswerService(
+                        @Qualifier("agentFinalAnswerChatClient") ChatClient chatClient,
+                        PromptBuilder promptBuilder,
+                        FinalAnswerPromptContextBuilder promptContextBuilder) {
 
-        this.chatClient = Objects.requireNonNull(
-                chatClient,
-                "agentFinalAnswerChatClient must not be null");
+                this.chatClient = Objects.requireNonNull(
+                                chatClient,
+                                "agentFinalAnswerChatClient must not be null");
 
-        this.promptBuilder = Objects.requireNonNull(
-                promptBuilder,
-                "PromptBuilder must not be null");
+                this.promptBuilder = Objects.requireNonNull(
+                                promptBuilder,
+                                "PromptBuilder must not be null");
 
-        this.promptContextBuilder = Objects.requireNonNull(
-                promptContextBuilder,
-                "FinalAnswerPromptContextBuilder must not be null");
-    }
-
-    @Override
-    public String generate(
-            AgentContext context) {
-
-        Objects.requireNonNull(
-                context,
-                "AgentContext must not be null");
-
-        FinalAnswerPromptContext promptContext = promptContextBuilder.build(
-                context);
-
-        Prompt prompt = promptBuilder.buildFinalAnswer(
-                promptContext);
-
-        String content = chatClient
-                .prompt(prompt)
-                .call()
-                .content();
-
-        if (content == null
-                || content.isBlank()) {
-
-            throw new IllegalStateException(
-                    "Final answer must not be blank");
+                this.promptContextBuilder = Objects.requireNonNull(
+                                promptContextBuilder,
+                                "FinalAnswerPromptContextBuilder must not be null");
         }
 
-        return content.trim();
-    }
+        @Override
+        public String generate(
+                        AgentContext context) {
+
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
+
+                FinalAnswerPromptContext promptContext = promptContextBuilder.build(
+                                context);
+
+                Prompt prompt = promptBuilder.buildFinalAnswer(
+                                promptContext);
+
+                String content = chatClient
+                                .prompt(prompt)
+                                .call()
+                                .content();
+
+                if (content == null
+                                || content.isBlank()) {
+
+                        throw new IllegalStateException(
+                                        "Final answer must not be blank");
+                }
+
+                return content.trim();
+        }
+
+        @Override
+        public String stream(
+                        AgentContext context,
+                        Consumer<String> chunkConsumer) {
+
+                Objects.requireNonNull(
+                                context,
+                                "AgentContext must not be null");
+
+                Objects.requireNonNull(
+                                chunkConsumer,
+                                "chunkConsumer must not be null");
+
+                FinalAnswerPromptContext promptContext = promptContextBuilder.build(
+                                context);
+
+                Prompt prompt = promptBuilder.buildFinalAnswer(
+                                promptContext);
+
+                StringBuilder answer = new StringBuilder();
+
+                chatClient
+                                .prompt(prompt)
+                                .stream()
+                                .content()
+                                .doOnNext(
+                                                chunk -> {
+
+                                                        if (chunk == null
+                                                                        || chunk.isEmpty()) {
+
+                                                                return;
+                                                        }
+
+                                                        answer.append(
+                                                                        chunk);
+
+                                                        chunkConsumer.accept(
+                                                                        chunk);
+                                                })
+                                .blockLast();
+
+                String content = answer.toString()
+                                .trim();
+
+                if (content.isBlank()) {
+
+                        throw new IllegalStateException(
+                                        "Final answer must not be blank");
+                }
+
+                return content;
+        }
 }

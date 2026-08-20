@@ -3,6 +3,8 @@ package com.quince.lawyeraiassistant.agent.tool;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
+import com.quince.lawyeraiassistant.performance.PerformanceTimer;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -13,6 +15,8 @@ import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
 
 import jakarta.annotation.PreDestroy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -31,6 +35,9 @@ import java.util.concurrent.TimeoutException;
 public class DefaultToolActionExecutor
                 implements ToolActionExecutor {
 
+        private static final Logger log = LoggerFactory.getLogger(
+                        DefaultToolActionExecutor.class);
+
         private final AgentToolRegistry toolRegistry;
 
         private final AgentExecutionLimits executionLimits;
@@ -39,10 +46,13 @@ public class DefaultToolActionExecutor
 
         private final SecurityAuditLogger securityAuditLogger;
 
+        private final AgentPerformanceContext performanceContext;
+
         public DefaultToolActionExecutor(
                         AgentToolRegistry toolRegistry,
                         AgentExecutionLimits executionLimits,
-                        SecurityAuditLogger securityAuditLogger) {
+                        SecurityAuditLogger securityAuditLogger,
+                        AgentPerformanceContext performanceContext) {
 
                 this.toolRegistry = Objects.requireNonNull(
                                 toolRegistry,
@@ -55,6 +65,10 @@ public class DefaultToolActionExecutor
                 this.securityAuditLogger = Objects.requireNonNull(
                                 securityAuditLogger,
                                 "securityAuditLogger must not be null");
+
+                this.performanceContext = Objects.requireNonNull(
+                                performanceContext,
+                                "AgentPerformanceContext must not be null");
 
                 this.executorService = Executors.newVirtualThreadPerTaskExecutor();
         }
@@ -72,6 +86,8 @@ public class DefaultToolActionExecutor
         public ToolObservation execute(
                         ToolExecutionContext executionContext,
                         ToolAction action) {
+
+                PerformanceTimer timer = PerformanceTimer.start();
 
                 Objects.requireNonNull(
                                 executionContext,
@@ -161,6 +177,20 @@ public class DefaultToolActionExecutor
                                         action.getToolName(),
                                         message,
                                         evidenceSecurityContext);
+                } finally {
+
+                        long durationMs = timer.elapsedMillis();
+
+                        performanceContext
+                                        .current()
+                                        .ifPresent(
+                                                        metrics -> metrics.recordToolCall(
+                                                                        durationMs));
+
+                        log.info(
+                                        "Tool execution finished. toolName={}, durationMs={}",
+                                        action.getToolName(),
+                                        durationMs);
                 }
 
                 Objects.requireNonNull(

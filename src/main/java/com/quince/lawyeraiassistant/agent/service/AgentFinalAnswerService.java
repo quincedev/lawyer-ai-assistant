@@ -1,5 +1,7 @@
 package com.quince.lawyeraiassistant.agent.service;
 
+import java.util.function.Consumer;
+
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 
 /**
@@ -28,4 +30,8 @@ public interface AgentFinalAnswerService {
      * @return 最终答案
      */
     String generate(AgentContext context);
+
+    String stream(
+            AgentContext context,
+            Consumer<String> chunkConsumer);
 }

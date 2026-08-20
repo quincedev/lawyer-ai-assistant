@@ -1,6 +1,9 @@
 package com.quince.lawyeraiassistant.agent.runtime;
 
 import com.quince.lawyeraiassistant.agent.action.AgentActionSelector;
+import com.quince.lawyeraiassistant.agent.action.policy.DuplicateToolCallPolicy;
+import com.quince.lawyeraiassistant.agent.action.policy.NoProgressRetryPolicy;
+import com.quince.lawyeraiassistant.agent.action.routing.DeterministicActionRouter;
 import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
@@ -14,6 +17,9 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
@@ -56,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -89,6 +96,10 @@ class DefaultAgentRuntimeTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private AgentMicrometerMetrics micrometerMetrics;
+
+        private AgentPerformanceSnapshotRecorder performanceSnapshotRecorder;
+
         @BeforeEach
         void setUp() {
 
@@ -114,6 +125,10 @@ class DefaultAgentRuntimeTest {
                                 AgentFinalAnswerService.class);
 
                 securityAuditLogger = mock(SecurityAuditLogger.class);
+
+                micrometerMetrics = mock(AgentMicrometerMetrics.class);
+
+                performanceSnapshotRecorder = mock(AgentPerformanceSnapshotRecorder.class);
 
                 executionLimits = new AgentExecutionLimits(
                                 10,
@@ -657,6 +672,56 @@ class DefaultAgentRuntimeTest {
         }
 
         @Test
+        void shouldSuppressRetryAfterIdenticalToolEvidenceIsReturnedTwice() {
+
+                AgentContext initialized = initializedContext(
+                                AgentTask.pending(
+                                                "task-2",
+                                                "检索劳动合同违法解除的法律依据"));
+                ToolAction toolAction = ToolAction.of(
+                                "task-2",
+                                "searchLegalKnowledge",
+                                Map.of("legalQuestion", "检索违法解除劳动合同的法律依据"));
+                ToolObservation evidence = ToolObservation.success(
+                                "task-2",
+                                "searchLegalKnowledge",
+                                "Evidence A");
+
+                when(agentPipeline.execute(any())).thenReturn(initialized);
+                when(actionSelector.select(any(), any()))
+                                .thenReturn(AgentAction.tool(toolAction));
+                when(actionExecutionOperator.execute(any(), any(), any()))
+                                .thenReturn(AgentActionExecutionResult.tool(evidence));
+                when(reflectionService.reflect(any(), any()))
+                                .thenReturn(
+                                                ReflectionResult.of(
+                                                                ReflectionDecision.RETRY,
+                                                                "需要再次检索"),
+                                                ReflectionResult.of(
+                                                                ReflectionDecision.RETRY,
+                                                                "仍需再次检索"));
+                when(finalAnswerService.generate(any()))
+                                .thenReturn("基于现有证据形成最终意见");
+
+                AgentContext result = runtime(10)
+                                .run(AgentContext.from("分析劳动合同违法解除的主要法律责任"));
+
+                verify(actionExecutionOperator, times(2))
+                                .execute(
+                                                any(),
+                                                argThat(task -> "task-2".equals(task.getId())),
+                                                argThat(AgentAction::isTool));
+                verify(reflectionService, atMost(2))
+                                .reflect(
+                                                any(),
+                                                argThat(task -> "task-2".equals(task.getId())));
+                assertEquals(AgentStatus.FINISHED, result.getStatus());
+                assertTrue(
+                                result.getExecutionLogs().stream()
+                                                .anyMatch(log -> log.contains("Retry suppressed")));
+        }
+
+        @Test
         void shouldReplanAndExecuteNewPlanWhenReflectionReturnsReplan() {
 
                 AgentContext initialized = initializedContext(
@@ -780,8 +845,23 @@ class DefaultAgentRuntimeTest {
                                                 any(),
                                                 argThat(
                                                                 currentTask -> currentTask != null
-                                                                                && "task-2".equals(
+                                                                                && "task-1".equals(
                                                                                                 currentTask.getId())));
+
+                verify(
+                                actionExecutionOperator)
+                                .execute(
+                                                any(),
+                                                argThat(
+                                                                currentTask -> currentTask != null
+                                                                                && "task-2".equals(
+                                                                                                currentTask.getId())),
+                                                argThat(
+                                                                action -> action != null
+                                                                                && action.isTool()
+                                                                                && "searchLegalKnowledge".equals(
+                                                                                                action.requireToolAction()
+                                                                                                                .getToolName())));
 
                 assertEquals(
                                 AgentTaskStatus.COMPLETED,
@@ -1701,7 +1781,14 @@ class DefaultAgentRuntimeTest {
                                                 runtimeGuardrailService,
                                                 runtimeResourceGuardrailService,
                                                 legalEvidenceTrustPolicy,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                new DuplicateToolCallPolicy(),
+                                                new DeterministicActionRouter(),
+                                                new NoProgressRetryPolicy(),
+                                                new AgentPerformanceContext(),
+                                                ignored -> List.of(),
+                                                micrometerMetrics,
+                                                performanceSnapshotRecorder));
 
                 assertEquals(
                                 "skillSelector must not be null",
@@ -1815,7 +1902,10 @@ class DefaultAgentRuntimeTest {
 
                 /*
                  * =====================================================
-                 * Capture 每一轮进入 Action Selector 的 AgentContext
+                 * Capture 每一轮进入 Action Execution 的 AgentContext。
+                 *
+                 * 两个任务均可由 DeterministicActionRouter 确定，
+                 * 因此不应再经过 LLM Action Selector。
                  * =====================================================
                  */
                 ArgumentCaptor<AgentContext> contextCaptor = ArgumentCaptor.forClass(
@@ -1824,16 +1914,25 @@ class DefaultAgentRuntimeTest {
                 ArgumentCaptor<AgentTask> taskCaptor = ArgumentCaptor.forClass(
                                 AgentTask.class);
 
+                ArgumentCaptor<AgentAction> actionCaptor = ArgumentCaptor.forClass(
+                                AgentAction.class);
+
                 verify(
-                                actionSelector,
+                                actionExecutionOperator,
                                 times(2))
-                                .select(
+                                .execute(
                                                 contextCaptor.capture(),
-                                                taskCaptor.capture());
+                                                taskCaptor.capture(),
+                                                actionCaptor.capture());
+
+                verifyNoInteractions(
+                                actionSelector);
 
                 List<AgentContext> contexts = contextCaptor.getAllValues();
 
                 List<AgentTask> tasks = taskCaptor.getAllValues();
+
+                List<AgentAction> actions = actionCaptor.getAllValues();
 
                 assertEquals(
                                 2,
@@ -1842,6 +1941,10 @@ class DefaultAgentRuntimeTest {
                 assertEquals(
                                 2,
                                 tasks.size());
+
+                assertEquals(
+                                2,
+                                actions.size());
 
                 /*
                  * =====================================================
@@ -1869,6 +1972,16 @@ class DefaultAgentRuntimeTest {
                                 "task-1",
                                 tasks.get(0)
                                                 .getId());
+
+                assertTrue(
+                                actions.get(0)
+                                                .isTool());
+
+                assertEquals(
+                                "searchLegalKnowledge",
+                                actions.get(0)
+                                                .requireToolAction()
+                                                .getToolName());
 
                 /*
                  * =====================================================
@@ -1920,6 +2033,10 @@ class DefaultAgentRuntimeTest {
                                 "task-2",
                                 tasks.get(1)
                                                 .getId());
+
+                assertTrue(
+                                actions.get(1)
+                                                .isReason());
 
                 /*
                  * =====================================================
@@ -2395,7 +2512,14 @@ class DefaultAgentRuntimeTest {
                                 runtimeGuardrailService,
                                 resourceGuardrailService,
                                 legalEvidenceTrustPolicy,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                new DuplicateToolCallPolicy(),
+                                new DeterministicActionRouter(),
+                                new NoProgressRetryPolicy(),
+                                new AgentPerformanceContext(),
+                                ignored -> List.of(),
+                                micrometerMetrics,
+                                performanceSnapshotRecorder);
         }
 
         private DefaultAgentRuntime runtime(

@@ -1,9 +1,14 @@
 package com.quince.lawyeraiassistant.retrieval.integration;
 
+import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
+import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
+import com.quince.lawyeraiassistant.cache.retrieval.CaffeineRetrievalCache;
+import com.quince.lawyeraiassistant.cache.retrieval.RetrievalCache;
 import com.quince.lawyeraiassistant.query.pipeline.DefaultQueryPipeline;
 import com.quince.lawyeraiassistant.query.pipeline.QueryPipeline;
 import com.quince.lawyeraiassistant.query.transformer.RewriteTransformer;
 import com.quince.lawyeraiassistant.rag.vector.tenant.TenantKnowledgeFilterFactory;
+import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.operator.VectorSearchOperator;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
@@ -20,6 +25,9 @@ import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 
 import java.util.List;
+import java.time.Duration;
+
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -85,7 +93,11 @@ class CustomRetrievalPipelineIntegrationTest {
 
                 retrievalOrchestrator = new RetrievalOrchestrator(
                                 queryPipeline,
-                                retrieverPipeline);
+                                retrieverPipeline,
+                                disabledRetrievalCache(),
+                                new CacheKeyFactory(new ObjectMapper()),
+                                disabledCacheProperties(),
+                                retrievalProperties());
         }
 
         @Test
@@ -220,7 +232,11 @@ class CustomRetrievalPipelineIntegrationTest {
 
                 RetrievalOrchestrator orchestrator = new RetrievalOrchestrator(
                                 queryPipeline,
-                                retrieverPipeline);
+                                retrieverPipeline,
+                                disabledRetrievalCache(),
+                                new CacheKeyFactory(new ObjectMapper()),
+                                disabledCacheProperties(),
+                                retrievalProperties());
 
                 when(
                                 documentRetriever.retrieve(
@@ -336,5 +352,61 @@ class CustomRetrievalPipelineIntegrationTest {
                                 tenantKnowledgeFilterFactory)
                                 .createForTenant(
                                                 "tenant-a");
+        }
+
+        @Test
+        void shouldReuseRetrievalCacheWithinTenantAndIsolateDifferentTenants() {
+
+                QueryPipeline queryPipeline = new DefaultQueryPipeline(
+                                List.of(new RewriteTransformer()));
+                RetrieverPipeline retrieverPipeline = new DefaultRetrieverPipeline(
+                                List.of(new VectorSearchOperator(
+                                                documentRetriever,
+                                                tenantKnowledgeFilterFactory)));
+                RetrievalOrchestrator cachedOrchestrator = new RetrievalOrchestrator(
+                                queryPipeline,
+                                retrieverPipeline,
+                                new CaffeineRetrievalCache(
+                                                100,
+                                                Duration.ofMinutes(10)),
+                                new CacheKeyFactory(new ObjectMapper()),
+                                new AiCacheProperties(),
+                                retrievalProperties());
+
+                when(documentRetriever.retrieve(any(Query.class)))
+                                .thenReturn(List.of(new Document("劳动合同解除相关规定")));
+
+                RetrieverContext first = cachedOrchestrator.retrieveForTenant(
+                                "劳动合同解除需要赔偿吗？",
+                                "tenant-a");
+                RetrieverContext second = cachedOrchestrator.retrieveForTenant(
+                                "劳动合同解除需要赔偿吗？",
+                                "tenant-a");
+
+                assertEquals(first.getDocuments(), second.getDocuments());
+                verify(documentRetriever, times(1)).retrieve(any(Query.class));
+
+                cachedOrchestrator.retrieveForTenant(
+                                "劳动合同解除需要赔偿吗？",
+                                "tenant-b");
+
+                verify(documentRetriever, times(2)).retrieve(any(Query.class));
+        }
+
+        private RetrievalCache disabledRetrievalCache() {
+
+                return mock(RetrievalCache.class);
+        }
+
+        private AiCacheProperties disabledCacheProperties() {
+
+                AiCacheProperties properties = new AiCacheProperties();
+                properties.setEnabled(false);
+                return properties;
+        }
+
+        private RetrievalProperties retrievalProperties() {
+
+                return new RetrievalProperties(5, 0.0);
         }
 }

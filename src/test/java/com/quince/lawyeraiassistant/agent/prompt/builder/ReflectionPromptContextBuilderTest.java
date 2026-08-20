@@ -4,6 +4,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.prompt.config.AgentPromptWindowProperties;
 import com.quince.lawyeraiassistant.agent.prompt.model.ReflectionPromptContext;
 import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
 import com.quince.lawyeraiassistant.security.SecurityTest;
@@ -11,6 +12,7 @@ import com.quince.lawyeraiassistant.security.SecurityTest;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.quince.lawyeraiassistant.security.legal.TestLegalSecurityContexts.toolResult;
@@ -25,7 +27,7 @@ class ReflectionPromptContextBuilderTest {
         void setUp() {
 
                 builder = new ReflectionPromptContextBuilder(
-                                new LegalEvidencePromptFormatter());
+                                new LegalEvidencePromptFormatter(), new AgentPromptWindowProperties());
         }
 
         @Test
@@ -142,6 +144,29 @@ class ReflectionPromptContextBuilderTest {
                 assertTrue(result.observations().contains("Type: REASON"));
                 assertTrue(result.observations().contains("Task: task-1"));
                 assertTrue(result.observations().contains("现有材料不足以确认解除是否合法"));
+        }
+
+        @Test
+        void shouldIncludeOnlyCurrentTaskObservations() {
+
+                AgentContext context = AgentContext.from("Analyze current task")
+                                .appendObservation(ToolObservation.success(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "SECRET_A",
+                                                toolResult()))
+                                .appendObservation(ToolObservation.success(
+                                                "task-2",
+                                                "searchLegalKnowledge",
+                                                "CURRENT_B",
+                                                toolResult()));
+
+                ReflectionPromptContext prompt = builder.build(
+                                context,
+                                AgentTask.pending("task-2", "Analyze current evidence"));
+
+                assertFalse(prompt.observations().contains("SECRET_A"));
+                assertTrue(prompt.observations().contains("CURRENT_B"));
         }
 
         @Test

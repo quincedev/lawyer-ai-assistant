@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.agent.tool.legal;
 
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
@@ -11,6 +12,10 @@ import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.agent.tool.DefaultToolActionExecutor;
 import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
+import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
+import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
+import com.quince.lawyeraiassistant.cache.tool.CaffeineToolResultCache;
+import com.quince.lawyeraiassistant.cache.tool.ToolCachePolicy;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
@@ -65,6 +70,10 @@ class AgentMcpBehaviorIntegrationTest {
 
         private ObjectMapper objectMapper;
 
+        private McpToolResultSecurityService resultSecurityService;
+
+        private AgentPerformanceContext performanceContext;
+
         @BeforeEach
         void setUp() {
 
@@ -80,6 +89,8 @@ class AgentMcpBehaviorIntegrationTest {
                 securityAuditLogger = mock(SecurityAuditLogger.class);
 
                 tenantExecutionTokenService = mock(McpTenantExecutionTokenService.class);
+
+                performanceContext = new AgentPerformanceContext();
 
                 objectMapper = new ObjectMapper();
 
@@ -100,7 +111,7 @@ class AgentMcpBehaviorIntegrationTest {
                                                                 mcpToolCallback
                                                 });
 
-                McpToolResultSecurityService resultSecurityService = mock(
+                resultSecurityService = mock(
                                 McpToolResultSecurityService.class);
 
                 when(
@@ -112,12 +123,22 @@ class AgentMcpBehaviorIntegrationTest {
                                                                 invocation.getArgument(0),
                                                                 "testResultSecurity"));
 
+                AiCacheProperties cacheProperties = new AiCacheProperties();
+
                 McpLegalKnowledgeTool mcpTool = new McpLegalKnowledgeTool(
                                 provider,
                                 objectMapper,
                                 resultSecurityService,
                                 securityAuditLogger,
-                                tenantExecutionTokenService);
+                                tenantExecutionTokenService,
+                                new CaffeineToolResultCache(
+                                                100,
+                                                Duration.ofMinutes(10)),
+                                new ToolCachePolicy(),
+                                new CacheKeyFactory(objectMapper),
+                                cacheProperties,
+                                content -> content,
+                                performanceContext);
 
                 toolRegistry = new AgentToolRegistry(
                                 List.of(
@@ -138,7 +159,8 @@ class AgentMcpBehaviorIntegrationTest {
                 toolActionExecutor = new DefaultToolActionExecutor(
                                 toolRegistry,
                                 executionLimits,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                performanceContext);
 
                 AgentSkill legalResearchSkill = AgentSkill.of(
                                 "legal-research",
@@ -339,5 +361,46 @@ class AgentMcpBehaviorIntegrationTest {
                                 objectMapper.readTree(arguments.getValue())
                                                 .get(LegalToolContract.EXECUTION_TOKEN)
                                                 .asString());
+        }
+
+        @Test
+        void shouldReuseCachedMcpResultForSameTenantAndArgumentsButReapplySecurity() {
+
+                TenantContext tenant = new TenantContext(
+                                "tenant-a",
+                                "user-a",
+                                "lawyer-a",
+                                Set.of(UserRole.LAWYER));
+                AgentContext agentContext = AgentContext.builder()
+                                .goal("research")
+                                .tenantContext(tenant)
+                                .build();
+                ToolAction action = ToolAction.of(
+                                "task-cache",
+                                LegalKnowledgeTool.TOOL_NAME,
+                                Map.of(
+                                                LegalKnowledgeTool.LEGAL_QUESTION_ARGUMENT,
+                                                "违法解除劳动合同"));
+
+                when(tenantExecutionTokenService.issue(tenant))
+                                .thenReturn("signed-token");
+                when(mcpToolCallback.call(anyString()))
+                                .thenReturn("《劳动合同法》第八十七条");
+
+                ToolObservation first = toolActionExecutor.execute(
+                                ToolExecutionContext.from(agentContext),
+                                action);
+                ToolObservation second = toolActionExecutor.execute(
+                                ToolExecutionContext.from(agentContext),
+                                action);
+
+                assertTrue(first.isSuccess());
+                assertTrue(second.isSuccess());
+                assertEquals(first.getContent(), second.getContent());
+                verify(mcpToolCallback).call(anyString());
+                verify(resultSecurityService, org.mockito.Mockito.times(2))
+                                .evaluate(
+                                                LegalKnowledgeTool.TOOL_NAME,
+                                                "《劳动合同法》第八十七条");
         }
 }

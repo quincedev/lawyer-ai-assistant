@@ -5,23 +5,27 @@ import java.util.Objects;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 
-/**
- * Trusted runtime context supplied to Agent Tools.
- *
- * <p>
- * Important:
- * this context is created by Java Runtime,
- * not by the LLM and not by ToolAction arguments.
- * </p>
- */
 public final class ToolExecutionContext {
 
     private final TenantContext tenantContext;
 
+    /*
+     * Runtime trusted original goal.
+     *
+     * 注意：
+     * 这是 Java Runtime 从 AgentContext 中获取，
+     * 不是 LLM-generated Tool arguments。
+     */
+    private final String executionGoal;
+
     private ToolExecutionContext(
-            TenantContext tenantContext) {
+            TenantContext tenantContext,
+            String executionGoal) {
 
         this.tenantContext = tenantContext;
+
+        this.executionGoal = normalizeOptionalText(
+                executionGoal);
     }
 
     public static ToolExecutionContext from(
@@ -32,20 +36,14 @@ public final class ToolExecutionContext {
                 "agentContext must not be null");
 
         return new ToolExecutionContext(
-                agentContext.getTenantContext());
+                agentContext.getTenantContext(),
+                agentContext.getGoal());
     }
 
-    /**
-     * Legacy/internal execution without tenant identity.
-     *
-     * <p>
-     * Downstream tenant-aware resources must fail closed
-     * to SHARED-only behavior.
-     * </p>
-     */
     public static ToolExecutionContext sharedOnly() {
 
         return new ToolExecutionContext(
+                null,
                 null);
     }
 
@@ -63,5 +61,41 @@ public final class ToolExecutionContext {
         }
 
         return tenantContext;
+    }
+
+    public boolean hasExecutionGoal() {
+
+        return executionGoal != null;
+    }
+
+    public String requireExecutionGoal() {
+
+        if (executionGoal == null) {
+
+            throw new IllegalStateException(
+                    "Execution goal is required");
+        }
+
+        return executionGoal;
+    }
+
+    public String getExecutionGoal() {
+
+        return executionGoal;
+    }
+
+    private static String normalizeOptionalText(
+            String value) {
+
+        if (value == null) {
+
+            return null;
+        }
+
+        String normalized = value.trim();
+
+        return normalized.isEmpty()
+                ? null
+                : normalized;
     }
 }

@@ -5,6 +5,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.ReasonResult;
 import com.quince.lawyeraiassistant.agent.parser.AgentPlanParser;
 import com.quince.lawyeraiassistant.agent.prompt.model.PlanningPromptContext;
+import com.quince.lawyeraiassistant.agent.service.support.BoundedLlmCallExecutor;
 import com.quince.lawyeraiassistant.prompt.builder.PromptBuilder;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +38,8 @@ class DefaultAgentPlanningServiceTest {
         private CallResponseSpec responseSpec;
 
         private DefaultAgentPlanningService planningService;
+
+        private BoundedLlmCallExecutor llmCallExecutor;
 
         @BeforeEach
         void setUp() {
@@ -55,10 +59,13 @@ class DefaultAgentPlanningServiceTest {
                 responseSpec = mock(
                                 CallResponseSpec.class);
 
+                llmCallExecutor = new BoundedLlmCallExecutor();
+
                 planningService = new DefaultAgentPlanningService(
                                 chatClient,
                                 promptBuilder,
-                                agentPlanParser);
+                                agentPlanParser,
+                                llmCallExecutor);
         }
 
         @Test
@@ -287,6 +294,11 @@ class DefaultAgentPlanningServiceTest {
                 assertEquals(
                                 "Planning result must not be blank",
                                 exception.getMessage());
+
+                verify(
+                                responseSpec,
+                                times(2))
+                                .content();
         }
 
         @Test
@@ -327,6 +339,80 @@ class DefaultAgentPlanningServiceTest {
                 assertEquals(
                                 "Planning result must not be blank",
                                 exception.getMessage());
+        }
+
+        @Test
+        void shouldRetryPlanningOnceWhenFirstResponseIsBlank() {
+
+                PlanningPromptContext context = createContext();
+
+                Prompt prompt = mock(
+                                Prompt.class);
+
+                String validContent = """
+                                task-1|识别违法解除争议点
+                                task-2|检索相关法律依据
+                                task-3|形成法律结论
+                                """;
+
+                AgentPlan expectedPlan = AgentPlan.from(
+                                List.of(
+                                                AgentTask.pending(
+                                                                "task-1",
+                                                                "识别违法解除争议点"),
+                                                AgentTask.pending(
+                                                                "task-2",
+                                                                "检索相关法律依据"),
+                                                AgentTask.pending(
+                                                                "task-3",
+                                                                "形成法律结论")));
+
+                when(
+                                promptBuilder.buildPlanning(
+                                                context))
+                                .thenReturn(
+                                                prompt);
+
+                when(
+                                chatClient.prompt(
+                                                prompt))
+                                .thenReturn(
+                                                requestSpec);
+
+                when(
+                                requestSpec.call())
+                                .thenReturn(
+                                                responseSpec);
+
+                when(
+                                responseSpec.content())
+                                .thenReturn(
+                                                "   ",
+                                                validContent);
+
+                when(
+                                agentPlanParser.parse(
+                                                validContent))
+                                .thenReturn(
+                                                expectedPlan);
+
+                AgentPlan result = planningService.plan(
+                                context);
+
+                assertSame(
+                                expectedPlan,
+                                result);
+
+                verify(
+                                responseSpec,
+                                org.mockito.Mockito.times(
+                                                2))
+                                .content();
+
+                verify(
+                                agentPlanParser)
+                                .parse(
+                                                validContent);
         }
 
         private PlanningPromptContext createContext() {

@@ -1,6 +1,9 @@
 package com.quince.lawyeraiassistant.agent.runtime;
 
 import com.quince.lawyeraiassistant.agent.action.AgentActionSelector;
+import com.quince.lawyeraiassistant.agent.action.policy.DuplicateToolCallPolicy;
+import com.quince.lawyeraiassistant.agent.action.policy.NoProgressRetryPolicy;
+import com.quince.lawyeraiassistant.agent.action.routing.DeterministicActionRouter;
 import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
@@ -13,11 +16,21 @@ import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceMetrics;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshot;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.skill.selector.AgentSkillSelector;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamEvent;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamEventType;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamPublisher;
+import com.quince.lawyeraiassistant.agent.stream.NoOpAgentStreamPublisher;
+import com.quince.lawyeraiassistant.performance.PerformanceTimer;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -30,18 +43,27 @@ import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
 import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailOperation;
 import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailResult;
 import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailService;
+import com.quince.lawyeraiassistant.security.runtime.performance.PerformanceGuardrailService;
+import com.quince.lawyeraiassistant.security.runtime.performance.PerformanceGuardrailResult;
 import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceGuardrailService;
 import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceResult;
 import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class DefaultAgentRuntime
                 implements AgentRuntime {
+
+        private static final Logger log = LoggerFactory.getLogger(
+                        DefaultAgentRuntime.class);
 
         private static final String AGENT_FINISHED_LOG = "Agent finished";
 
@@ -69,6 +91,20 @@ public class DefaultAgentRuntime
 
         private final SecurityAuditLogger securityAuditLogger;
 
+        private final DuplicateToolCallPolicy duplicateToolCallPolicy;
+
+        private final DeterministicActionRouter deterministicActionRouter;
+
+        private final NoProgressRetryPolicy noProgressRetryPolicy;
+
+        private final AgentPerformanceContext performanceContext;
+
+        private final PerformanceGuardrailService performanceGuardrailService;
+
+        private final AgentMicrometerMetrics micrometerMetrics;
+
+        private final AgentPerformanceSnapshotRecorder performanceSnapshotRecorder;
+
         public DefaultAgentRuntime(
                         AgentPipeline agentPipeline,
                         AgentSkillSelector skillSelector,
@@ -81,7 +117,14 @@ public class DefaultAgentRuntime
                         RuntimeGuardrailService runtimeGuardrailService,
                         RuntimeResourceGuardrailService runtimeResourceGuardrailService,
                         LegalEvidenceTrustPolicy legalEvidenceTrustPolicy,
-                        SecurityAuditLogger securityAuditLogger) {
+                        SecurityAuditLogger securityAuditLogger,
+                        DuplicateToolCallPolicy duplicateToolCallPolicy,
+                        DeterministicActionRouter deterministicActionRouter,
+                        NoProgressRetryPolicy noProgressRetryPolicy,
+                        AgentPerformanceContext performanceContext,
+                        PerformanceGuardrailService performanceGuardrailService,
+                        AgentMicrometerMetrics micrometerMetrics,
+                        AgentPerformanceSnapshotRecorder performanceSnapshotRecorder) {
 
                 this.agentPipeline = Objects.requireNonNull(
                                 agentPipeline,
@@ -130,16 +173,135 @@ public class DefaultAgentRuntime
                 this.securityAuditLogger = Objects.requireNonNull(
                                 securityAuditLogger,
                                 "securityAuditLogger must not be null");
+
+                this.duplicateToolCallPolicy = Objects.requireNonNull(
+                                duplicateToolCallPolicy,
+                                "duplicateToolCallPolicy must not be null");
+
+                this.deterministicActionRouter = Objects.requireNonNull(
+                                deterministicActionRouter,
+                                "deterministicActionRouter must not be null");
+
+                this.noProgressRetryPolicy = Objects.requireNonNull(
+                                noProgressRetryPolicy,
+                                "noProgressRetryPolicy must not be null");
+
+                this.performanceContext = Objects.requireNonNull(
+                                performanceContext,
+                                "AgentPerformanceContext must not be null");
+
+                this.performanceGuardrailService = Objects.requireNonNull(
+                                performanceGuardrailService,
+                                "PerformanceGuardrailService must not be null");
+
+                this.micrometerMetrics = Objects.requireNonNull(
+                                micrometerMetrics,
+                                "AgentMicrometerMetrics must not be null");
+
+                this.performanceSnapshotRecorder = Objects.requireNonNull(
+                                performanceSnapshotRecorder,
+                                "AgentPerformanceSnapshotRecorder must not be null");
         }
 
         @Override
         public AgentContext run(
                         AgentContext context) {
 
+                return run(
+                                context,
+                                NoOpAgentStreamPublisher.INSTANCE);
+        }
+
+        @Override
+        public AgentContext run(
+                        AgentContext context,
+                        AgentStreamPublisher publisher) {
+
                 Objects.requireNonNull(
                                 context,
                                 "AgentContext must not be null");
 
+                Objects.requireNonNull(
+                                publisher,
+                                "AgentStreamPublisher must not be null");
+
+                long startedAt = System.nanoTime();
+
+                AgentContext result = null;
+
+                RuntimeExecutionStatus executionStatus = RuntimeExecutionStatus.FAILED;
+
+                AgentPerformanceMetrics performanceMetrics = performanceContext.start();
+
+                try {
+
+                        publisher.publish(
+                                        AgentStreamEvent.of(
+                                                        AgentStreamEventType.AGENT_STARTED,
+                                                        "Agent execution started"));
+
+                        result = runInternal(
+                                        context,
+                                        publisher);
+
+                        executionStatus = RuntimeExecutionStatus.SUCCESS;
+
+                        return result;
+
+                } catch (RuntimeException exception) {
+
+                        publisher.publish(
+                                        AgentStreamEvent.of(
+                                                        AgentStreamEventType.AGENT_FAILED,
+                                                        "Agent execution failed"));
+
+                        throw exception;
+
+                } finally {
+
+                        long durationMs = TimeUnit.NANOSECONDS.toMillis(
+                                        System.nanoTime()
+                                                        - startedAt);
+
+                        logAgentExecutionFinished(
+                                        context,
+                                        result,
+                                        executionStatus,
+                                        durationMs);
+
+                        try {
+
+                                AgentPerformanceSnapshot snapshot = performanceMetrics.snapshot();
+
+                                performanceSnapshotRecorder.record(
+                                                snapshot);
+
+                                logPerformanceSummary(
+                                                snapshot);
+
+                                micrometerMetrics.recordExecution(
+                                                snapshot);
+
+                                List<PerformanceGuardrailResult> guardrailResults = performanceGuardrailService
+                                                .evaluate(
+                                                                snapshot);
+
+                                guardrailResults.forEach(
+                                                this::logPerformanceGuardrailResult);
+
+                                micrometerMetrics.recordGuardrailResults(
+                                                guardrailResults);
+
+                        } finally {
+
+                                performanceContext.clear();
+                        }
+                }
+        }
+
+        private AgentContext runInternal(
+                        AgentContext context,
+                        AgentStreamPublisher publisher) {
                 /*
                  * 每次 Agent Execution 独享一个 Budget。
                  *
@@ -151,6 +313,11 @@ public class DefaultAgentRuntime
 
                 AgentContext skillAwareContext = attachSelectedSkill(
                                 context);
+
+                publisher.publish(
+                                AgentStreamEvent.of(
+                                                AgentStreamEventType.PLANNING_STARTED,
+                                                "正在生成执行计划"));
 
                 /*
                  * =====================================================
@@ -165,6 +332,11 @@ public class DefaultAgentRuntime
                  */
                 AgentContext current = agentPipeline.execute(
                                 skillAwareContext);
+
+                publisher.publish(
+                                AgentStreamEvent.of(
+                                                AgentStreamEventType.PLANNING_COMPLETED,
+                                                "执行计划生成完成"));
 
                 /*
                  * =====================================================
@@ -209,7 +381,8 @@ public class DefaultAgentRuntime
 
                                 return finishWithFallback(
                                                 current,
-                                                stepDecision.reason());
+                                                stepDecision.reason(),
+                                                publisher);
                         }
 
                         /*
@@ -267,18 +440,30 @@ public class DefaultAgentRuntime
                                                         pendingTask.getId())
                                         .orElseThrow();
 
+                        publisher.publish(
+                                        AgentStreamEvent.task(
+                                                        AgentStreamEventType.TASK_STARTED,
+                                                        runningTask.getId(),
+                                                        runningTask.getDescription()));
+
                         /*
                          * =================================================
                          * 5. Action Selection
                          * =================================================
                          */
-                        AgentAction action = actionSelector.select(
+
+                        AgentAction action = resolveAction(
                                         current,
                                         runningTask);
 
                         Objects.requireNonNull(
                                         action,
                                         "AgentAction must not be null");
+
+                        action = applyDuplicateToolCallGuard(
+                                        current,
+                                        runningTask,
+                                        action);
 
                         /*
                          * =================================================
@@ -309,7 +494,8 @@ public class DefaultAgentRuntime
 
                                         return finishWithFallback(
                                                         current,
-                                                        toolCallDecision.reason());
+                                                        toolCallDecision.reason(),
+                                                        publisher);
                                 }
                         }
 
@@ -318,6 +504,24 @@ public class DefaultAgentRuntime
                          * 7. Action Execution
                          * =================================================
                          */
+                        if (action.isTool()) {
+
+                                publisher.publish(
+                                                AgentStreamEvent.task(
+                                                                AgentStreamEventType.TOOL_STARTED,
+                                                                runningTask.getId(),
+                                                                "正在执行工具调用"));
+                        }
+
+                        if (action.isReason()) {
+
+                                publisher.publish(
+                                                AgentStreamEvent.task(
+                                                                AgentStreamEventType.REASONING_STARTED,
+                                                                runningTask.getId(),
+                                                                "正在分析当前任务"));
+                        }
+
                         AgentActionExecutionResult result = actionExecutionOperator.execute(
                                         current,
                                         runningTask,
@@ -340,7 +544,22 @@ public class DefaultAgentRuntime
                          */
                         if (action.isTool()) {
 
+                                publisher.publish(
+                                                AgentStreamEvent.task(
+                                                                AgentStreamEventType.TOOL_COMPLETED,
+                                                                runningTask.getId(),
+                                                                "工具调用完成"));
+
                                 budget.recordToolCall();
+                        }
+
+                        if (action.isReason()) {
+
+                                publisher.publish(
+                                                AgentStreamEvent.task(
+                                                                AgentStreamEventType.REASONING_COMPLETED,
+                                                                runningTask.getId(),
+                                                                "当前任务分析完成"));
                         }
 
                         /*
@@ -375,6 +594,13 @@ public class DefaultAgentRuntime
                          * 9. Reflection
                          * =================================================
                          */
+
+                        publisher.publish(
+                                        AgentStreamEvent.task(
+                                                        AgentStreamEventType.REFLECTION_STARTED,
+                                                        runningTask.getId(),
+                                                        "正在评估当前任务结果"));
+
                         ReflectionResult reflectionResult = reflectionService.reflect(
                                         current,
                                         runningTask);
@@ -382,6 +608,12 @@ public class DefaultAgentRuntime
                         Objects.requireNonNull(
                                         reflectionResult,
                                         "ReflectionResult must not be null");
+
+                        publisher.publish(
+                                        AgentStreamEvent.task(
+                                                        AgentStreamEventType.REFLECTION_COMPLETED,
+                                                        runningTask.getId(),
+                                                        "当前任务结果评估完成"));
 
                         /*
                          * =================================================
@@ -393,24 +625,70 @@ public class DefaultAgentRuntime
                          * Retry Budget 属于整个 Agent Execution，
                          * 不再是 per-task retry counter。
                          */
+                        /*
+                         * =================================================
+                         * 10. RETRY Guardrail + No-progress Detection
+                         * =================================================
+                         */
                         if (reflectionResult.shouldRetry()) {
 
-                                RuntimeGuardrailResult retryDecision = runtimeGuardrailService.evaluate(
-                                                RuntimeGuardrailOperation.RETRY,
-                                                budget);
+                                /*
+                                 * 如果同一 Task / Tool 已经连续拿到完全相同的
+                                 * successful Evidence，
+                                 * 再次 RETRY 不可能产生新信息。
+                                 *
+                                 * 此时禁止继续 Tool retry loop。
+                                 */
+                                if (noProgressRetryPolicy.isNoProgress(
+                                                current,
+                                                runningTask)) {
 
-                                if (retryDecision.isDenied()) {
+                                        performanceContext.current()
+                                                        .ifPresent(
+                                                                        AgentPerformanceMetrics::recordNoProgressSuppression);
 
-                                        auditRuntimeLimit(
+                                        log.warn(
+                                                        "No-progress retry suppressed. taskId={}, reason=IDENTICAL_TOOL_EVIDENCE",
+                                                        runningTask.getId());
+
+                                        /*
+                                         * 当前 Task 已经至少获得有效 Tool Evidence，
+                                         * 只是 Reflection 认为证据“不够完美”。
+                                         *
+                                         * 不再重复 Tool，而是把当前 Task 视为已经获得
+                                         * best-effort evidence，让后续 REASON / FINAL ANSWER
+                                         * 基于现有 Evidence 完成。
+                                         */
+                                        reflectionResult = ReflectionResult.of(
+                                                        com.quince.lawyeraiassistant.agent.model.ReflectionDecision.CONTINUE,
+                                                        "Retry suppressed because repeated tool execution produced identical evidence. "
+                                                                        + "Continue with the best available evidence.");
+
+                                } else {
+
+                                        RuntimeGuardrailResult retryDecision = runtimeGuardrailService.evaluate(
                                                         RuntimeGuardrailOperation.RETRY,
-                                                        retryDecision);
+                                                        budget);
 
-                                        return finishWithFallback(
-                                                        current,
-                                                        retryDecision.reason());
+                                        if (retryDecision.isDenied()) {
+
+                                                auditRuntimeLimit(
+                                                                RuntimeGuardrailOperation.RETRY,
+                                                                retryDecision);
+
+                                                return finishWithFallback(
+                                                                current,
+                                                                retryDecision.reason(),
+                                                                publisher);
+                                        }
+
+                                        budget.recordRetry();
+
+                                        performanceContext
+                                                        .current()
+                                                        .ifPresent(
+                                                                        metrics -> metrics.recordRetry());
                                 }
-
-                                budget.recordRetry();
                         }
 
                         /*
@@ -432,7 +710,8 @@ public class DefaultAgentRuntime
 
                                         return finishWithFallback(
                                                         current,
-                                                        replanDecision.reason());
+                                                        replanDecision.reason(),
+                                                        publisher);
                                 }
 
                                 budget.recordReplan();
@@ -446,7 +725,8 @@ public class DefaultAgentRuntime
                         current = handleReflectionDecision(
                                         current,
                                         runningTask,
-                                        reflectionResult);
+                                        reflectionResult,
+                                        publisher);
 
                         /*
                          * FINISH decision is terminal.
@@ -466,7 +746,8 @@ public class DefaultAgentRuntime
                  * 但可能还没有显式 FINAL_ANSWER Action。
                  */
                 current = ensureFinalAnswer(
-                                current);
+                                current,
+                                publisher);
 
                 return markFinished(
                                 current);
@@ -698,7 +979,8 @@ public class DefaultAgentRuntime
         private AgentContext handleReflectionDecision(
                         AgentContext context,
                         AgentTask task,
-                        ReflectionResult reflectionResult) {
+                        ReflectionResult reflectionResult,
+                        AgentStreamPublisher publisher) {
 
                 Objects.requireNonNull(
                                 reflectionResult,
@@ -727,7 +1009,8 @@ public class DefaultAgentRuntime
                         case FINISH ->
                                 handleFinish(
                                                 context,
-                                                reflectionResult);
+                                                reflectionResult,
+                                                publisher);
                 };
         }
 
@@ -784,10 +1067,12 @@ public class DefaultAgentRuntime
 
         private AgentContext handleFinish(
                         AgentContext context,
-                        ReflectionResult reflectionResult) {
+                        ReflectionResult reflectionResult,
+                        AgentStreamPublisher publisher) {
 
                 AgentContext updated = ensureFinalAnswer(
-                                context)
+                                context,
+                                publisher)
                                 .appendExecutionLog(
                                                 "Reflection FINISH: "
                                                                 + reflectionResult.getSummary());
@@ -804,14 +1089,16 @@ public class DefaultAgentRuntime
 
         private AgentContext finishWithFallback(
                         AgentContext context,
-                        String reason) {
+                        String reason,
+                        AgentStreamPublisher publisher) {
 
                 AgentContext updated = context.appendExecutionLog(
                                 "Runtime guardrail triggered: "
                                                 + reason);
 
                 updated = ensureFinalAnswer(
-                                updated);
+                                updated,
+                                publisher);
 
                 return markFinished(
                                 updated);
@@ -842,12 +1129,18 @@ public class DefaultAgentRuntime
          */
 
         private AgentContext ensureFinalAnswer(
-                        AgentContext context) {
+                        AgentContext context,
+                        AgentStreamPublisher publisher) {
 
                 if (context.hasFinalAnswer()) {
 
                         return context;
                 }
+
+                publisher.publish(
+                                AgentStreamEvent.of(
+                                                AgentStreamEventType.FINAL_ANSWER_STARTED,
+                                                "正在生成最终答案"));
 
                 String finalAnswer = finalAnswerService.generate(
                                 context);
@@ -1069,6 +1362,185 @@ public class DefaultAgentRuntime
                                                 "DefaultAgentRuntime",
                                                 result.reason(),
                                                 metadata));
+        }
+
+        /*
+         * =========================================================
+         * Performance Baseline
+         * =========================================================
+         */
+
+        private void logAgentExecutionFinished(
+                        AgentContext initialContext,
+                        AgentContext result,
+                        RuntimeExecutionStatus executionStatus,
+                        long durationMs) {
+
+                String tenantId = initialContext.getTenantContext() == null
+                                ? "unknown"
+                                : initialContext.getTenantContext()
+                                                .tenantId();
+
+                AgentStatus agentStatus = result == null
+                                ? null
+                                : result.getStatus();
+
+                log.info(
+                                "Agent execution finished. tenantId={}, executionStatus={}, agentStatus={}, durationMs={}",
+                                tenantId,
+                                executionStatus,
+                                agentStatus,
+                                durationMs);
+        }
+
+        private void logPerformanceSummary(
+                        AgentPerformanceSnapshot snapshot) {
+
+                log.info(
+                                "Agent performance summary. "
+                                                + "totalDurationMs={}, "
+                                                + "llmCalls={}, "
+                                                + "llmDurationMs={}, "
+                                                + "llmRatio={}, "
+                                                + "toolCalls={}, "
+                                                + "toolDurationMs={}, "
+                                                + "mcpCalls={}, "
+                                                + "mcpDurationMs={}, "
+                                                + "cacheHits={}, "
+                                                + "cacheMisses={}, "
+                                                + "cacheHitRatio={}, "
+                                                + "evidenceOriginalChars={}, "
+                                                + "evidenceCompactedChars={}, "
+                                                + "evidenceReductionRatio={}, "
+                                                + "retries={}, "
+                                                + "noProgressSuppressions={}",
+                                snapshot.totalDurationMs(),
+                                snapshot.llmCalls(),
+                                snapshot.llmDurationMs(),
+                                snapshot.llmDurationRatio(),
+                                snapshot.toolCalls(),
+                                snapshot.toolDurationMs(),
+                                snapshot.mcpCalls(),
+                                snapshot.mcpDurationMs(),
+                                snapshot.cacheHits(),
+                                snapshot.cacheMisses(),
+                                snapshot.cacheHitRatio(),
+                                snapshot.evidenceOriginalChars(),
+                                snapshot.evidenceCompactedChars(),
+                                snapshot.evidenceReductionRatio(),
+                                snapshot.retries(),
+                                snapshot.noProgressSuppressions());
+        }
+
+        private void logPerformanceGuardrailResult(
+                        PerformanceGuardrailResult result) {
+
+                if (result.isCritical()) {
+
+                        log.error(
+                                        "Agent performance guardrail critical. metric={}, actual={}, threshold={}, reason={}",
+                                        result.metric(),
+                                        result.actual(),
+                                        result.threshold(),
+                                        result.reason());
+
+                } else if (result.isWarn()) {
+
+                        log.warn(
+                                        "Agent performance guardrail warning. metric={}, actual={}, threshold={}, reason={}",
+                                        result.metric(),
+                                        result.actual(),
+                                        result.threshold(),
+                                        result.reason());
+                }
+        }
+
+        private enum RuntimeExecutionStatus {
+
+                SUCCESS,
+
+                FAILED
+        }
+
+        private <T> T measureStage(
+                        String stage,
+                        java.util.function.Supplier<T> operation) {
+
+                PerformanceTimer timer = PerformanceTimer.start();
+
+                try {
+
+                        return operation.get();
+
+                } finally {
+
+                        log.info(
+                                        "Agent stage finished. stage={}, durationMs={}",
+                                        stage,
+                                        timer.elapsedMillis());
+                }
+        }
+
+        private AgentAction applyDuplicateToolCallGuard(
+                        AgentContext context,
+                        AgentTask currentTask,
+                        AgentAction action) {
+
+                if (action == null
+                                || !action.isTool()) {
+
+                        return action;
+                }
+
+                String toolName = action.requireToolAction()
+                                .getToolName();
+
+                if (!duplicateToolCallPolicy.shouldBlock(
+                                context,
+                                currentTask,
+                                toolName)) {
+
+                        return action;
+                }
+
+                log.warn(
+                                "Duplicate tool call blocked. taskId={}, toolName={}",
+                                currentTask.getId(),
+                                toolName);
+
+                return AgentAction.reason(
+                                currentTask.getId());
+        }
+
+        private AgentAction resolveAction(
+                        AgentContext context,
+                        AgentTask task) {
+
+                return deterministicActionRouter
+                                .route(
+                                                context,
+                                                task)
+                                .map(
+                                                action -> {
+
+                                                        log.info(
+                                                                        "Deterministic action selected. taskId={}, actionType={}",
+                                                                        task.getId(),
+                                                                        action.getType());
+
+                                                        return action;
+                                                })
+                                .orElseGet(
+                                                () -> {
+
+                                                        AgentContext actionSelectionContext = context;
+
+                                                        return measureStage(
+                                                                        "ACTION_SELECTION",
+                                                                        () -> actionSelector.select(
+                                                                                        actionSelectionContext,
+                                                                                        task));
+                                                });
         }
 
 }

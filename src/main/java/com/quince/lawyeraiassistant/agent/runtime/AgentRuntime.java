@@ -1,6 +1,7 @@
 package com.quince.lawyeraiassistant.agent.runtime;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamPublisher;
 
 /**
  * Agent Runtime。
@@ -30,4 +31,8 @@ public interface AgentRuntime {
      * @return 最终 AgentContext
      */
     AgentContext run(AgentContext context);
+
+    AgentContext run(
+            AgentContext context,
+            AgentStreamPublisher publisher);
 }

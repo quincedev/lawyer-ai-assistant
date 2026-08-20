@@ -7,6 +7,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.prompt.builder.ReflectionPromptContextBuilder;
+import com.quince.lawyeraiassistant.agent.prompt.config.AgentPromptWindowProperties;
 import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidencePromptFormatter;
 
 import java.util.Map;
@@ -23,7 +24,7 @@ class ReflectionPromptContextTest {
         void setUp() {
 
                 builder = new ReflectionPromptContextBuilder(
-                                new LegalEvidencePromptFormatter());
+                                new LegalEvidencePromptFormatter(), new AgentPromptWindowProperties());
         }
 
         @Test

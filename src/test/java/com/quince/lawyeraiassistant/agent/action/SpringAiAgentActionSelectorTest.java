@@ -1,11 +1,13 @@
 package com.quince.lawyeraiassistant.agent.action;
 
+import com.quince.lawyeraiassistant.agent.action.policy.EvidenceAwareActionPolicy;
 import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionDecision;
 import com.quince.lawyeraiassistant.agent.model.AgentActionType;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.prompt.config.AgentPromptWindowProperties;
 import com.quince.lawyeraiassistant.agent.skill.AgentSkill;
 import com.quince.lawyeraiassistant.agent.skill.context.SkillContext;
 import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
@@ -54,6 +56,8 @@ class SpringAiAgentActionSelectorTest {
 
         private LegalEvidencePromptFormatter evidencePromptFormatter;
 
+        private AgentPromptWindowProperties promptWindowProperties;
+
         @BeforeEach
         void setUp() {
 
@@ -88,6 +92,8 @@ class SpringAiAgentActionSelectorTest {
 
                 evidencePromptFormatter = new LegalEvidencePromptFormatter();
 
+                promptWindowProperties = new AgentPromptWindowProperties();
+
                 toolRegistry = new AgentToolRegistry(
                                 List.of(
                                                 legalTool,
@@ -105,8 +111,7 @@ class SpringAiAgentActionSelectorTest {
 
                 when(
                                 requestSpec.user(
-                                                org.mockito.ArgumentMatchers
-                                                                .<Consumer<ChatClient.PromptUserSpec>>any()))
+                                                org.mockito.ArgumentMatchers.<Consumer<ChatClient.PromptUserSpec>>any()))
                                 .thenAnswer(
                                                 invocation -> {
                                                         Consumer<ChatClient.PromptUserSpec> userSpecConsumer = invocation
@@ -151,6 +156,8 @@ class SpringAiAgentActionSelectorTest {
                                 toolRegistry,
                                 skillToolScope,
                                 evidencePromptFormatter,
+                                promptWindowProperties,
+                                new EvidenceAwareActionPolicy(),
                                 promptResource);
         }
 
@@ -588,6 +595,67 @@ class SpringAiAgentActionSelectorTest {
                                 .param(
                                                 "availableTools",
                                                 "searchLegalKnowledge");
+        }
+
+        @Test
+        void shouldLimitHistoricalObservationsInActionSelectionPrompt() {
+
+                promptWindowProperties.setMaxHistoricalObservations(1);
+
+                AgentContext context = AgentContext.from("Analyze observations")
+                                .appendObservation(ToolObservation.success(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "HISTORICAL_A",
+                                                toolResult()))
+                                .appendObservation(ToolObservation.success(
+                                                "task-2",
+                                                "searchLegalKnowledge",
+                                                "HISTORICAL_B",
+                                                toolResult()));
+
+                when(skillToolScope.filterAllowed(
+                                context.getSkillContext(),
+                                toolRegistry.names()))
+                                .thenReturn(List.of());
+
+                selector.select(
+                                context,
+                                AgentTask.pending("task-3", "Analyze current task"));
+
+                verify(promptUserSpec).param(
+                                org.mockito.ArgumentMatchers.eq("observations"),
+                                org.mockito.ArgumentMatchers.argThat(value -> {
+                                        String observations = String.valueOf(value);
+                                        return observations.contains("HISTORICAL_B")
+                                                        && !observations.contains("HISTORICAL_A");
+                                }));
+        }
+
+        @Test
+        void shouldExposeReasonPreferenceWhenAnalyticalTaskHasExistingEvidence() {
+
+                AgentContext context = AgentContext.from("Analyze legal evidence")
+                                .appendObservation(ToolObservation.success(
+                                                "task-1",
+                                                "searchLegalKnowledge",
+                                                "EXISTING_EVIDENCE",
+                                                toolResult()));
+
+                when(skillToolScope.filterAllowed(
+                                context.getSkillContext(),
+                                toolRegistry.names()))
+                                .thenReturn(List.of("searchLegalKnowledge"));
+
+                selector.select(
+                                context,
+                                AgentTask.pending("task-2", "分析已有证据并形成结论"));
+
+                verify(promptUserSpec).param(
+                                org.mockito.ArgumentMatchers.eq("actionPolicyHint"),
+                                org.mockito.ArgumentMatchers.argThat(
+                                                value -> String.valueOf(value)
+                                                                .contains("优先使用 REASON")));
         }
 
         private AgentTool mockTool(

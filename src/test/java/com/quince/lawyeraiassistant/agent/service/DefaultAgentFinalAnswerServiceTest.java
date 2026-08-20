@@ -8,6 +8,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -17,224 +21,213 @@ import static org.mockito.Mockito.when;
 
 class DefaultAgentFinalAnswerServiceTest {
 
-    private ChatClient chatClient;
+        private ChatClient chatClient;
+        private ChatClient.ChatClientRequestSpec requestSpec;
+        private ChatClient.CallResponseSpec callResponseSpec;
+        private ChatClient.StreamResponseSpec streamResponseSpec;
+        private PromptBuilder promptBuilder;
+        private FinalAnswerPromptContextBuilder promptContextBuilder;
+        private DefaultAgentFinalAnswerService service;
+        private Prompt prompt;
 
-    private ChatClient.ChatClientRequestSpec requestSpec;
+        @BeforeEach
+        void setUp() {
+                chatClient = mock(ChatClient.class);
+                requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+                callResponseSpec = mock(ChatClient.CallResponseSpec.class);
+                streamResponseSpec = mock(ChatClient.StreamResponseSpec.class);
+                promptBuilder = mock(PromptBuilder.class);
+                promptContextBuilder = mock(FinalAnswerPromptContextBuilder.class);
+                prompt = mock(Prompt.class);
 
-    private ChatClient.CallResponseSpec callResponseSpec;
+                service = new DefaultAgentFinalAnswerService(
+                                chatClient,
+                                promptBuilder,
+                                promptContextBuilder);
+        }
 
-    private PromptBuilder promptBuilder;
+        @Test
+        void shouldGenerateFinalAnswer() {
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同并生成律师意见");
 
-    private FinalAnswerPromptContextBuilder promptContextBuilder;
+                FinalAnswerPromptContext promptContext = promptContext();
 
-    private DefaultAgentFinalAnswerService service;
+                preparePrompt(context, promptContext);
 
-    private Prompt prompt;
+                when(requestSpec.call())
+                                .thenReturn(callResponseSpec);
 
-    @BeforeEach
-    void setUp() {
+                when(callResponseSpec.content())
+                                .thenReturn("  根据现有材料，该劳动合同存在以下法律风险。  ");
 
-        chatClient = mock(
-                ChatClient.class);
+                String result = service.generate(context);
 
-        requestSpec = mock(
-                ChatClient.ChatClientRequestSpec.class);
+                assertEquals(
+                                "根据现有材料，该劳动合同存在以下法律风险。",
+                                result);
+        }
 
-        callResponseSpec = mock(
-                ChatClient.CallResponseSpec.class);
+        @Test
+        void shouldStreamChunksAndReturnCompleteAnswer() {
+                AgentContext context = AgentContext.from(
+                                "分析劳动合同并生成律师意见");
 
-        promptBuilder = mock(
-                PromptBuilder.class);
+                FinalAnswerPromptContext promptContext = promptContext();
 
-        promptContextBuilder = mock(
-                FinalAnswerPromptContextBuilder.class);
+                preparePrompt(context, promptContext);
 
-        prompt = mock(
-                Prompt.class);
+                when(requestSpec.stream())
+                                .thenReturn(streamResponseSpec);
 
-        service = new DefaultAgentFinalAnswerService(
-                chatClient,
-                promptBuilder,
-                promptContextBuilder);
-    }
+                when(streamResponseSpec.content())
+                                .thenReturn(Flux.just(
+                                                "劳动合同解除",
+                                                "需要满足",
+                                                "相应法定条件。"));
 
-    @Test
-    void shouldGenerateFinalAnswer() {
+                List<String> chunks = new ArrayList<>();
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同并生成律师意见");
+                String result = service.stream(
+                                context,
+                                chunks::add);
 
-        FinalAnswerPromptContext promptContext = new FinalAnswerPromptContext(
-                "分析劳动合同并生成律师意见",
-                "用户希望分析劳动合同风险",
-                "task-1 | COMPLETED | 查询法律依据",
-                "劳动合同法相关检索结果");
+                assertEquals(
+                                "劳动合同解除需要满足相应法定条件。",
+                                result);
 
-        when(
-                promptContextBuilder.build(
-                        context))
-                .thenReturn(
-                        promptContext);
+                assertEquals(
+                                List.of(
+                                                "劳动合同解除",
+                                                "需要满足",
+                                                "相应法定条件。"),
+                                chunks);
 
-        when(
-                promptBuilder.buildFinalAnswer(
-                        promptContext))
-                .thenReturn(
-                        prompt);
+                verify(requestSpec).stream();
+                verify(streamResponseSpec).content();
+        }
 
-        when(
-                chatClient.prompt(
-                        prompt))
-                .thenReturn(
-                        requestSpec);
+        @Test
+        void shouldIgnoreNullOrEmptyStreamChunks() {
+                AgentContext context = AgentContext.from("分析劳动合同");
+                preparePrompt(context, promptContext());
 
-        when(
-                requestSpec.call())
-                .thenReturn(
-                        callResponseSpec);
+                when(requestSpec.stream())
+                                .thenReturn(streamResponseSpec);
 
-        when(
-                callResponseSpec.content())
-                .thenReturn(
-                        "  根据现有材料，该劳动合同存在以下法律风险。  ");
+                when(streamResponseSpec.content())
+                                .thenReturn(Flux.just("有效", "", "结果"));
 
-        String result = service.generate(
-                context);
+                List<String> chunks = new ArrayList<>();
 
-        assertEquals(
-                "根据现有材料，该劳动合同存在以下法律风险。",
-                result);
+                String result = service.stream(context, chunks::add);
 
-        verify(
-                promptContextBuilder)
-                .build(
-                        context);
+                assertEquals("有效结果", result);
+                assertEquals(List.of("有效", "结果"), chunks);
+        }
 
-        verify(
-                promptBuilder)
-                .buildFinalAnswer(
-                        promptContext);
+        @Test
+        void shouldRejectNullStreamingConsumer() {
+                assertThrows(
+                                NullPointerException.class,
+                                () -> service.stream(
+                                                AgentContext.from("分析劳动合同"),
+                                                null));
+        }
 
-        verify(
-                chatClient)
-                .prompt(
-                        prompt);
+        @Test
+        void shouldRejectBlankStreamingResult() {
+                AgentContext context = AgentContext.from("分析劳动合同");
+                preparePrompt(context, promptContext());
 
-        verify(
-                requestSpec)
-                .call();
+                when(requestSpec.stream())
+                                .thenReturn(streamResponseSpec);
 
-        verify(
-                callResponseSpec)
-                .content();
-    }
+                when(streamResponseSpec.content())
+                                .thenReturn(Flux.just("   "));
 
-    @Test
-    void shouldRejectNullContext() {
+                assertThrows(
+                                IllegalStateException.class,
+                                () -> service.stream(
+                                                context,
+                                                chunk -> {
+                                                }));
+        }
 
-        assertThrows(
-                NullPointerException.class,
-                () -> service.generate(
-                        null));
-    }
+        @Test
+        void shouldRejectNullContext() {
+                assertThrows(
+                                NullPointerException.class,
+                                () -> service.generate(null));
+        }
 
-    @Test
-    void shouldRejectNullFinalAnswer() {
+        @Test
+        void shouldRejectNullFinalAnswer() {
+                AgentContext context = AgentContext.from("分析劳动合同");
+                preparePrompt(context, new FinalAnswerPromptContext(
+                                "分析劳动合同",
+                                null,
+                                null,
+                                null));
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                when(requestSpec.call())
+                                .thenReturn(callResponseSpec);
 
-        FinalAnswerPromptContext promptContext = new FinalAnswerPromptContext(
-                "分析劳动合同",
-                null,
-                null,
-                null);
+                when(callResponseSpec.content())
+                                .thenReturn(null);
 
-        when(
-                promptContextBuilder.build(
-                        context))
-                .thenReturn(
-                        promptContext);
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> service.generate(context));
 
-        when(
-                promptBuilder.buildFinalAnswer(
-                        promptContext))
-                .thenReturn(
-                        prompt);
+                assertEquals(
+                                "Final answer must not be blank",
+                                exception.getMessage());
+        }
 
-        when(
-                chatClient.prompt(
-                        prompt))
-                .thenReturn(
-                        requestSpec);
+        @Test
+        void shouldRejectBlankFinalAnswer() {
+                AgentContext context = AgentContext.from("分析劳动合同");
+                preparePrompt(context, new FinalAnswerPromptContext(
+                                "分析劳动合同",
+                                null,
+                                null,
+                                null));
 
-        when(
-                requestSpec.call())
-                .thenReturn(
-                        callResponseSpec);
+                when(requestSpec.call())
+                                .thenReturn(callResponseSpec);
 
-        when(
-                callResponseSpec.content())
-                .thenReturn(
-                        null);
+                when(callResponseSpec.content())
+                                .thenReturn("     ");
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> service.generate(
-                        context));
+                IllegalStateException exception = assertThrows(
+                                IllegalStateException.class,
+                                () -> service.generate(context));
 
-        assertEquals(
-                "Final answer must not be blank",
-                exception.getMessage());
-    }
+                assertEquals(
+                                "Final answer must not be blank",
+                                exception.getMessage());
+        }
 
-    @Test
-    void shouldRejectBlankFinalAnswer() {
+        private void preparePrompt(
+                        AgentContext context,
+                        FinalAnswerPromptContext promptContext) {
 
-        AgentContext context = AgentContext.from(
-                "分析劳动合同");
+                when(promptContextBuilder.build(context))
+                                .thenReturn(promptContext);
 
-        FinalAnswerPromptContext promptContext = new FinalAnswerPromptContext(
-                "分析劳动合同",
-                null,
-                null,
-                null);
+                when(promptBuilder.buildFinalAnswer(promptContext))
+                                .thenReturn(prompt);
 
-        when(
-                promptContextBuilder.build(
-                        context))
-                .thenReturn(
-                        promptContext);
+                when(chatClient.prompt(prompt))
+                                .thenReturn(requestSpec);
+        }
 
-        when(
-                promptBuilder.buildFinalAnswer(
-                        promptContext))
-                .thenReturn(
-                        prompt);
-
-        when(
-                chatClient.prompt(
-                        prompt))
-                .thenReturn(
-                        requestSpec);
-
-        when(
-                requestSpec.call())
-                .thenReturn(
-                        callResponseSpec);
-
-        when(
-                callResponseSpec.content())
-                .thenReturn(
-                        "     ");
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> service.generate(
-                        context));
-
-        assertEquals(
-                "Final answer must not be blank",
-                exception.getMessage());
-    }
+        private FinalAnswerPromptContext promptContext() {
+                return new FinalAnswerPromptContext(
+                                "分析劳动合同并生成律师意见",
+                                "用户希望分析劳动合同风险",
+                                "task-1 | COMPLETED | 查询法律依据",
+                                "劳动合同法相关检索结果");
+        }
 }

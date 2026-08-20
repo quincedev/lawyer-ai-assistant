@@ -3,6 +3,7 @@ package com.quince.lawyeraiassistant.agent.tool;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
+import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
@@ -38,6 +39,8 @@ class DefaultToolActionExecutorTest {
 
         private SecurityAuditLogger securityAuditLogger;
 
+        private AgentPerformanceContext performanceContext;
+
         @BeforeEach
         void setUp() {
 
@@ -46,6 +49,8 @@ class DefaultToolActionExecutorTest {
                 agentTool = mock(AgentTool.class);
 
                 securityAuditLogger = mock(SecurityAuditLogger.class);
+
+                performanceContext = new AgentPerformanceContext();
 
                 executionLimits = new AgentExecutionLimits(
                                 10,
@@ -71,7 +76,8 @@ class DefaultToolActionExecutorTest {
                 executor = new DefaultToolActionExecutor(
                                 toolRegistry,
                                 executionLimits,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                performanceContext);
         }
 
         @AfterEach
@@ -197,7 +203,8 @@ class DefaultToolActionExecutorTest {
                                 () -> new DefaultToolActionExecutor(
                                                 null,
                                                 executionLimits,
-                                                securityAuditLogger));
+                                                securityAuditLogger,
+                                                performanceContext));
 
                 assertEquals(
                                 "toolRegistry must not be null",
@@ -245,7 +252,8 @@ class DefaultToolActionExecutorTest {
                 DefaultToolActionExecutor timeoutExecutor = new DefaultToolActionExecutor(
                                 toolRegistry,
                                 shortLimits,
-                                securityAuditLogger);
+                                securityAuditLogger,
+                                performanceContext);
 
                 try {
 

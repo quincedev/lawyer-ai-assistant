@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.agent.application;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
@@ -7,6 +8,9 @@ import org.springframework.stereotype.Service;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.runtime.AgentRuntime;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamEvent;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamEventType;
+import com.quince.lawyeraiassistant.agent.stream.AgentStreamPublisher;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
@@ -102,13 +106,65 @@ public class DefaultAgentApplicationService
         public AgentContext execute(
                         String goal) {
 
+                return executeInternal(
+                                goal,
+                                null,
+                                null);
+        }
+
+        @Override
+        public AgentContext executeStreaming(
+                        String goal,
+                        AgentStreamPublisher publisher) {
+
+                Objects.requireNonNull(
+                                publisher,
+                                "AgentStreamPublisher must not be null");
+
+                return executeInternal(
+                                goal,
+                                null,
+                                publisher);
+        }
+
+        @Override
+        public AgentContext executeStreaming(
+                        String goal,
+                        TenantContext tenantContext,
+                        AgentStreamPublisher publisher) {
+
+                Objects.requireNonNull(
+                                tenantContext,
+                                "TenantContext must not be null");
+
+                Objects.requireNonNull(
+                                publisher,
+                                "AgentStreamPublisher must not be null");
+
+                return executeInternal(
+                                goal,
+                                tenantContext,
+                                publisher);
+        }
+
+        private AgentContext executeInternal(
+                        String goal,
+                        TenantContext suppliedTenantContext,
+                        AgentStreamPublisher publisher) {
+
+                Objects.requireNonNull(
+                                goal,
+                                "goal must not be null");
+
                 GuardrailResult inputResult = inputGuardrailChain.evaluate(
                                 goal);
 
                 enforceInputGuardrail(
                                 inputResult);
 
-                TenantContext tenantContext = tenantContextProvider.current();
+                TenantContext tenantContext = suppliedTenantContext != null
+                                ? suppliedTenantContext
+                                : tenantContextProvider.current();
 
                 authorizeTenant(
                                 tenantContext);
@@ -122,8 +178,17 @@ public class DefaultAgentApplicationService
                 try (TenantQuotaLease ignored = acquireTenantExecutionQuota(
                                 tenantContext)) {
 
-                        result = agentRuntime.run(
-                                        initialContext);
+                        if (publisher == null) {
+
+                                result = agentRuntime.run(
+                                                initialContext);
+
+                        } else {
+
+                                result = agentRuntime.run(
+                                                initialContext,
+                                                publisher);
+                        }
                 }
 
                 GuardrailResult outputResult = outputGuardrailChain.evaluate(
@@ -131,6 +196,18 @@ public class DefaultAgentApplicationService
 
                 enforceOutputGuardrail(
                                 outputResult);
+
+                if (publisher != null) {
+
+                        publishFinalAnswer(
+                                        result.getFinalAnswer(),
+                                        publisher);
+
+                        publisher.publish(
+                                        AgentStreamEvent.of(
+                                                        AgentStreamEventType.AGENT_COMPLETED,
+                                                        "Agent execution completed"));
+                }
 
                 return result;
         }
@@ -230,6 +307,38 @@ public class DefaultAgentApplicationService
                                                                         tenantContext.userId())));
 
                         throw exception;
+                }
+        }
+
+        private void publishFinalAnswer(
+                        String finalAnswer,
+                        AgentStreamPublisher publisher) {
+
+                if (finalAnswer == null
+                                || finalAnswer.isBlank()) {
+
+                        return;
+                }
+
+                final int chunkSize = 120;
+
+                for (int start = 0; start < finalAnswer.length(); start += chunkSize) {
+
+                        int end = Math.min(
+                                        start + chunkSize,
+                                        finalAnswer.length());
+
+                        String chunk = finalAnswer.substring(
+                                        start,
+                                        end);
+
+                        publisher.publish(
+                                        new AgentStreamEvent(
+                                                        AgentStreamEventType.ANSWER_DELTA,
+                                                        null,
+                                                        chunk,
+                                                        Map.of(),
+                                                        Instant.now()));
                 }
         }
 }

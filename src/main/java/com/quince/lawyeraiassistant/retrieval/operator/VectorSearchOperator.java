@@ -1,7 +1,11 @@
 package com.quince.lawyeraiassistant.retrieval.operator;
 
+import com.quince.lawyeraiassistant.performance.PerformanceTimer;
 import com.quince.lawyeraiassistant.rag.vector.tenant.TenantKnowledgeFilterFactory;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
@@ -44,6 +48,9 @@ import java.util.Objects;
 @Order(100)
 public class VectorSearchOperator
                 implements RetrievalOperator {
+
+        private static final Logger log = LoggerFactory.getLogger(
+                        VectorSearchOperator.class);
 
         private final DocumentRetriever documentRetriever;
 
@@ -88,7 +95,22 @@ public class VectorSearchOperator
                                                                 filterExpression))
                                 .build();
 
-                List<Document> documents = documentRetriever.retrieve(query);
+                PerformanceTimer timer = PerformanceTimer.start();
+
+                List<Document> documents;
+
+                try {
+
+                        documents = documentRetriever.retrieve(
+                                        query);
+
+                } finally {
+
+                        log.info(
+                                        "Vector retrieval finished. tenantAware={}, durationMs={}",
+                                        context.hasTenantId(),
+                                        timer.elapsedMillis());
+                }
 
                 return context.toBuilder()
                                 .documents(
