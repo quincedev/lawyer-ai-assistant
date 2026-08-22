@@ -1,0 +1,28 @@
+services:
+  mysql:
+    ports:
+      - "3308:3306"
+
+  redis:
+    ports:
+      - "6380:6379"
+
+  ollama:
+    ports:
+      - "11435:11434"
+
+  mcp-server:
+    ports:
+      - "8081:8081"
+
+  mcp-agent:
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3000:3000"

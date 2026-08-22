@@ -159,6 +159,12 @@ public class SecurityConfiguration {
                                 .authorizeHttpRequests(
                                                 authorization -> authorization
 
+                                                                .requestMatchers(
+                                                                                "/actuator/health",
+                                                                                "/actuator/health/**",
+                                                                                "/actuator/prometheus")
+                                                                .permitAll()
+
                                                                 /*
                                                                  * Login endpoint.
                                                                  */

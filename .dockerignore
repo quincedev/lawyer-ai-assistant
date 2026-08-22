@@ -1,40 +1,36 @@
-HELP.md
+# ============================================================
+# Git
+# ============================================================
+
+.git
+.gitignore
+.gitattributes
+
 
 # ============================================================
-# Maven
+# Maven build output
 # ============================================================
 
 target/
-.mvn/wrapper/maven-wrapper.jar
-
-!**/src/main/**/target/
-!**/src/test/**/target/
 
 
 # ============================================================
-# Environment / Secrets
+# IDE
 # ============================================================
 
-.env
-.env.local
-.env.prod
-.env.production
+.idea/
+.vscode/
 
-# 保留模板文件
-!.env.example
+*.iml
+*.ipr
+*.iws
 
 
 # ============================================================
-# Local Docker Persistent Data
-#
-# 如果以后使用 bind mount：
-# docker-data/mysql
-# docker-data/redis
-# ...
-# 不提交 Git。
+# VSCodeCounter
 # ============================================================
 
-docker-data/
+.VSCodeCounter/
 
 
 # ============================================================
@@ -46,46 +42,40 @@ logs/
 
 
 # ============================================================
-# STS
+# Secrets
 # ============================================================
 
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+.env
+.env.local
+.env.prod
+.env.production
 
 
 # ============================================================
-# IntelliJ IDEA
+# Docker local persistence
 # ============================================================
 
-.idea
-*.iws
-*.iml
-*.ipr
+docker-data/
 
 
 # ============================================================
-# NetBeans
+# OS files
 # ============================================================
 
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-build/
-
-!**/src/main/**/build/
-!**/src/test/**/build/
+.DS_Store
+Thumbs.db
 
 
 # ============================================================
-# VS Code
+# Documentation not required for image build
 # ============================================================
 
-.vscode/
+HELP.md
+
+
+# ============================================================
+# Test / local artifacts
+# ============================================================
+
+*.tmp
+*.bak

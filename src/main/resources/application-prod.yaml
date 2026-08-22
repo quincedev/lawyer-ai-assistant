@@ -1,31 +1,41 @@
 # =============================================================
-# Production Security Configuration
+# Production Runtime Configuration
+#
+# 此 Profile 不决定：
+#
+# MCP Agent / MCP Server Role
+#
+# Role 必须分别由：
+#
+# mcp-agent
+# mcp-server
+#
+# 决定。
 # =============================================================
+
+# =============================================================
+# Graceful Shutdown
+# =============================================================
+server:
+    shutdown: graceful
 
 spring:
-    ai:
-        # Production 默认不主动开启 MCP。
-        # 具体 MCP Role 必须通过对应 Profile 显式开启。
-        mcp:
-            server:
-                enabled: false
-
-            client:
-                enabled: false
+    lifecycle:
+        timeout-per-shutdown-phase: 30s
 
 # =============================================================
-# Logging
+# Production Logging
 # =============================================================
 logging:
     level:
-        # Production 禁止输出完整 Prompt / Response DEBUG 日志。
+        # 生产环境禁止打印完整 Prompt / Response DEBUG 内容。
         com.quince.lawyeraiassistant.advisor.LoggingAdvisorV2: INFO
 
-        # Security Audit 保持可见。
+        # 安全审计继续保留。
         SECURITY_AUDIT: INFO
 
 # =============================================================
-# Actuator
+# Production Actuator
 # =============================================================
 management:
     endpoints:
@@ -33,43 +43,29 @@ management:
             exposure:
                 include:
                     - health
-                    - metrics
+                    - prometheus
 
     endpoint:
         health:
             show-details: never
 
-# =============================================================
-# Agent Runtime Security
-# =============================================================
-agent:
-    runtime:
-        max-steps: 10
-
-        max-tool-calls: 8
-
-        max-retries: 3
-
-        max-replans: 2
-
-        max-execution-time: 120s
-
-        max-tool-execution-time: 30s
-
-        max-observation-length: 20000
-
-        max-context-length: 60000
+            probes:
+                enabled: true
 
 # =============================================================
-# Security Guardrails
+# Production JWT
+#
+# Production 不允许使用 application.yaml
+# 中的开发 fallback secret。
+#
+# 容器必须显式提供：
+#
+# SECURITY_JWT_SECRET
 # =============================================================
 security:
-    guardrail:
-        input:
-            max-length: 10000
+    jwt:
+        issuer: ${JWT_ISSUER:lawyer-ai-assistant}
 
-            prompt-injection:
-                block-threshold: 2
+        secret: ${SECURITY_JWT_SECRET}
 
-        output:
-            max-length: 20000
+        access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:1h}

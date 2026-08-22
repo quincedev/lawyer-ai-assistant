@@ -16,33 +16,39 @@ spring:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY}
       chat:
-        model: deepseek-v4-flash
+        model: ${DEEPSEEK_CHAT_MODEL:deepseek-v4-flash}
 
     # =========================================================
     # Ollama Embedding
+    #
+    # Local:
+    #   http://localhost:11434
+    #
+    # Docker:
+    #   http://ollama:11434
     # =========================================================
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
 
       init:
-        # bge-m3 已手动下载，不在启动时自动拉取
+        # Local 环境已经手动下载 bge-m3，
+        # Spring Boot 启动时不主动 pull。
         pull-model-strategy: never
 
       embedding:
-        model: bge-m3
+        model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         truncate: true
 
     # =========================================================
-    # MCP
+    # MCP Role Isolation
     #
-    # 默认配置下：
-    # Server 关闭
-    # Client 关闭
+    # 基础配置不承担任何 MCP Role。
     #
-    # 具体由：
-    # application-mcp-server.yaml
-    # application-mcp-agent.yaml
-    # 覆盖。
+    # mcp-agent profile:
+    #   client = true
+    #
+    # mcp-server profile:
+    #   server = true
     # =========================================================
     mcp:
       server:
@@ -55,13 +61,15 @@ spring:
 # Application Configuration
 # =============================================================
 app:
+  # ===========================================================
+  # AI Cache
+  # ===========================================================
   cache:
     enabled: true
 
-    # Knowledge Base 内容变化时升级版本。
-    # 例如：
-    # v1 → v2
-    knowledge-version: v1
+    # Knowledge Base 更新时修改版本，
+    # 通过 Cache Key 自然淘汰旧缓存。
+    knowledge-version: ${AI_CACHE_KNOWLEDGE_VERSION:v1}
 
     retrieval:
       enabled: true
@@ -72,43 +80,49 @@ app:
       enabled: true
       maximum-size: 1000
       ttl: 30m
+
   # ===========================================================
-  # Agent Tool Mode
-  #
-  # 默认继续使用 Local Tool，
-  # 保证普通启动以及 Day13～Day15 原有能力不受影响。
-  #
-  # MCP Agent Profile 会覆盖为：
-  # legal-tool-mode: mcp
+  # Agent
   # ===========================================================
   agent:
+    # 普通 Local 启动继续使用 Local Tool。
+    #
+    # application-mcp-agent.yaml
+    # 会覆盖为 mcp。
     legal-tool-mode: local
 
+    # =========================================================
+    # Prompt Window
+    # =========================================================
     prompt-window:
       max-historical-observations: 1
       max-evidence-chars: 4000
 
+    # =========================================================
+    # Legal Evidence Compaction
+    # =========================================================
     legal-evidence-compaction:
       enabled: true
       max-chars: 8000
       max-section-chars: 1800
       max-sections: 4
-    
+
+    # =========================================================
+    # Performance Guardrail
+    #
+    # 注意：
+    # Runtime Guardrail 和 Performance Guardrail
+    # 职责不同。
+    #
+    # Performance Guardrail:
+    #   WARN / CRITICAL
+    #
+    # Runtime Guardrail:
+    #   真正执行时 BLOCK
+    # =========================================================
     performance-guardrail:
       warn-llm-calls: 12
       critical-llm-calls: 15
-
-      warn-tool-calls: 4
-      max-tool-calls: 6
-
-      warn-retries: 2
-      max-retries: 3
-
-      warn-replans: 1
-      max-replans: 2
-
-      warn-steps: 12
-      max-steps: 16
 
       warn-total-duration-ms: 120000
       critical-total-duration-ms: 180000
@@ -121,9 +135,12 @@ app:
 
       warn-low-cache-hit-ratio: 0.20
 
+  # ===========================================================
+  # Tenant
+  # ===========================================================
   tenant:
     quota:
-      # 单个 Tenant 同时允许运行的最大 Agent Execution 数量
+      # 单 Tenant 最大并发 Agent Execution。
       max-concurrent-agent-executions: 3
 
   # ===========================================================
@@ -131,37 +148,28 @@ app:
   # ===========================================================
   rag:
     splitter:
-      # 每个 Chunk 的目标 Token 数量
       chunk-size: 500
-
-      # Chunk 至少包含的字符数
       min-chunk-size-chars: 200
-
-      # 小于该长度的 Chunk 不进入 Embedding
       min-chunk-length-to-embed: 10
-
-      # 单个文档最多允许生成的 Chunk 数量
       max-num-chunks: 10000
-
-      # 切分时是否保留分隔符
       keep-separator: true
 
     legal-splitter:
-      # 每个法律 Chunk 的目标字符数
       chunk-size: 500
-
-      # 相邻 Chunk 重叠字符数
       chunk-overlap: 80
-
-      # 达到目标长度后向前寻找标点的最大范围
       boundary-search-size: 120
-
-      # 过短 Chunk 不保留
       min-chunk-size: 30
 
+    # 普通 Local 模式保持原来的行为。
+    #
+    # mcp-agent:
+    #   false
+    #
+    # mcp-server:
+    #   true
     knowledge-base:
       enabled: true
-      location: classpath:knowledge/
+      location: ${LEGAL_KNOWLEDGE_LOCATION:classpath:knowledge/}
 
     retrieval:
       top-k: 5
@@ -176,23 +184,23 @@ logging:
     SECURITY_AUDIT: INFO
 
 # =============================================================
-# Agent Runtime
+# Agent Runtime Guardrail
 # =============================================================
 agent:
   runtime:
-    # 单次 Agent Execution 最大 Task Execution Cycle 数量
+    # 最大 Task Execution Cycle
     max-steps: 10
 
-    # 单次 Agent Execution 最大 Tool Action 尝试次数
+    # 最大 Tool Action 尝试次数
     max-tool-calls: 8
 
-    # 单次 Agent Execution 最大 Retry 总次数
+    # 最大 Retry 总次数
     max-retries: 3
 
-    # 单次 Agent Execution 最大 Replan 次数
+    # 最大 Replan 次数
     max-replans: 2
 
-    # 整个 Agent Execution 最大执行时间
+    # Agent Execution 最大执行时间
     max-execution-time: 120s
 
     # 单次 Tool 最大执行时间
@@ -201,10 +209,16 @@ agent:
     # 单个 Observation 最大字符数
     max-observation-length: 20000
 
-    # Agent 上下文最大字符数
+    # Agent Context 最大字符数
     max-context-length: 60000
 
+# =============================================================
+# Security
+# =============================================================
 security:
+  # ===========================================================
+  # Input / Output Guardrail
+  # ===========================================================
   guardrail:
     input:
       max-length: 10000
@@ -215,17 +229,24 @@ security:
     output:
       max-length: 20000
 
+  # ===========================================================
+  # JWT
+  #
+  # Local 开发保留 fallback，
+  # 避免每次本地启动都必须额外配置环境变量。
+  #
+  # Production 会在 application-prod.yaml 中
+  # 强制覆盖成 SECURITY_JWT_SECRET。
+  # ===========================================================
   jwt:
-    issuer: lawyer-ai-assistant
+    issuer: ${JWT_ISSUER:lawyer-ai-assistant}
 
-    # 开发环境通过环境变量提供。
-    # 不要把真实 Secret 提交到 Git。
     secret: ${JWT_SECRET:change-this-development-secret-at-least-32-bytes-long}
 
-    access-token-ttl: 1h
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:1h}
 
 # =============================================================
-# Actuator
+# Actuator / Micrometer
 # =============================================================
 management:
   endpoints:
@@ -235,7 +256,12 @@ management:
           - health
           - info
           - metrics
+          - prometheus
 
   endpoint:
     health:
       show-details: when-authorized
+
+  metrics:
+    tags:
+      application: ${spring.application.name}

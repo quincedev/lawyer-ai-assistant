@@ -1,5 +1,5 @@
 server:
-    port: 8081
+    port: ${SERVER_PORT:8081}
 
 spring:
     application:
@@ -7,6 +7,9 @@ spring:
 
     ai:
         mcp:
+            # =======================================================
+            # MCP Server Role
+            # =======================================================
             server:
                 enabled: true
                 name: legal-mcp-server
@@ -23,35 +26,53 @@ spring:
                 annotation-scanner:
                     enabled: true
 
+            # =======================================================
+            # MCP Server 不再充当 MCP Client。
+            #
+            # 避免形成：
+            #
+            # Server
+            # → MCP Client
+            # → Server
+            # → ...
+            # =======================================================
             client:
                 enabled: false
 
 app:
     # ===========================================================
-    # Agent
-    #
-    # MCP Server 本身继续使用 Local Tool 实现真正的法律能力，
-    # 不再继续向其他 MCP Server 转发，避免形成调用环。
+    # Legal Tool
     # ===========================================================
     agent:
+        # MCP Server 内部真正执行 Local Legal Tool。
         legal-tool-mode: local
 
     # ===========================================================
     # MCP Server Security
-    #
-    # Server-side Tool Allowlist。
-    #
-    # 即使 8080 Agent 侧已经通过 ToolAuthorizationService，
-    # 8081 仍然独立执行 Server-side Security。
-    #
-    # 只有这里显式列出的 Tool 才允许执行。
-    # 未配置或不在列表中的 Tool 默认 DENY。
     # ===========================================================
     mcp:
         security:
+            # Default DENY。
+            #
+            # 只有白名单中的 Tool 才允许从 MCP 暴露。
             allowed-tools:
                 - searchLegalKnowledge
 
             arguments:
                 max-string-length: 10000
                 reject-unknown-fields: true
+
+    # ===========================================================
+    # RAG Knowledge Base
+    #
+    # 只有 MCP Server 负责：
+    #
+    # knowledge document
+    # → splitter
+    # → bge-m3
+    # → vector store
+    # ===========================================================
+    rag:
+        knowledge-base:
+            enabled: true
+            location: ${LEGAL_KNOWLEDGE_LOCATION:classpath:knowledge/}

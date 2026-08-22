@@ -1,0 +1,65 @@
+services:
+  mcp-agent:
+    ports:
+      - "8080:8080"
+    mem_limit: 2g
+    cpus: 2.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  mcp-server:
+    mem_limit: 2g
+    cpus: 2.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  mysql:
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  redis:
+    mem_limit: 512m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  prometheus:
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  grafana:
+    ports:
+      - "3000:3000"
+    mem_limit: 512m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  ollama:
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

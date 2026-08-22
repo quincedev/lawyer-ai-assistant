@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  - job_name: "lawyer-ai-mcp-agent"
+
+    metrics_path: /actuator/prometheus
+
+    static_configs:
+      - targets:
+          - "mcp-agent:8080"
+
+        labels:
+          application: "lawyer-ai-mcp-agent"
+
+
+  - job_name: "lawyer-ai-mcp-server"
+
+    metrics_path: /actuator/prometheus
+
+    static_configs:
+      - targets:
+          - "mcp-server:8081"
+
+        labels:
+          application: "lawyer-ai-mcp-server"

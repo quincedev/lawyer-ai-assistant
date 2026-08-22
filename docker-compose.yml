@@ -1,0 +1,250 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lawyer-ai-mysql
+
+    restart: unless-stopped
+
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+    expose:
+      - "3306"
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    networks:
+      - lawyer-ai-network
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7
+    container_name: lawyer-ai-redis
+
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    expose:
+      - "6379"
+
+    volumes:
+      - redis-data:/data
+
+    networks:
+      - lawyer-ai-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lawyer-ai-ollama
+
+    restart: unless-stopped
+
+    expose:
+      - "11434"
+
+    volumes:
+      - ollama-data:/root/.ollama
+
+    networks:
+      - lawyer-ai-network
+
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: lawyer-ai-ollama-init
+
+    restart: "no"
+
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+
+    networks:
+      - lawyer-ai-network
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+
+    command:
+      - >
+        ollama list | grep -q "${OLLAMA_EMBEDDING_MODEL:-bge-m3}"
+        || ollama pull "${OLLAMA_EMBEDDING_MODEL:-bge-m3}"
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: lawyer-ai-assistant:0.0.1
+    container_name: lawyer-ai-mcp-server
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: mcp-server
+
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+
+      OLLAMA_BASE_URL: http://ollama:11434
+
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+
+      LEGAL_KNOWLEDGE_LOCATION: ${LEGAL_KNOWLEDGE_LOCATION:-classpath:knowledge/}
+
+      AI_CACHE_KNOWLEDGE_VERSION: ${AI_CACHE_KNOWLEDGE_VERSION:-v1}
+
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=75.0
+        -XX:+ExitOnOutOfMemoryError
+
+    expose:
+      - "8081"
+
+    networks:
+      - lawyer-ai-network
+
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  mcp-agent:
+    image: lawyer-ai-assistant:0.0.1
+    container_name: lawyer-ai-mcp-agent
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: mcp-agent
+
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+
+      LEGAL_MCP_SERVER_URL: http://mcp-server:8081
+
+      MCP_REQUEST_TIMEOUT: ${MCP_REQUEST_TIMEOUT:-30s}
+
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=75.0
+        -XX:+ExitOnOutOfMemoryError
+
+    expose:
+      - "8080"
+
+    networks:
+      - lawyer-ai-network
+
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lawyer-ai-prometheus
+
+    restart: unless-stopped
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+    expose:
+      - "9090"
+
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+    networks:
+      - lawyer-ai-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lawyer-ai-grafana
+
+    restart: unless-stopped
+
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+
+    expose:
+      - "3000"
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+    networks:
+      - lawyer-ai-network
+
+    depends_on:
+      - prometheus
+
+networks:
+  lawyer-ai-network:
+    name: lawyer-ai-network
+
+volumes:
+  mysql-data:
+    name: lawyer-ai-mysql-data
+
+  redis-data:
+    name: lawyer-ai-redis-data
+
+  ollama-data:
+    name: lawyer-ai-ollama-data
+
+  prometheus-data:
+    name: lawyer-ai-prometheus-data
+
+  grafana-data:
+    name: lawyer-ai-grafana-data
