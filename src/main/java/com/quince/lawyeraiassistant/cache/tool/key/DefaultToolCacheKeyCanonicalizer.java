@@ -8,7 +8,7 @@ import java.util.Objects;
 
 import org.springframework.stereotype.Component;
 
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalToolContract;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 
 @Component
 public class DefaultToolCacheKeyCanonicalizer

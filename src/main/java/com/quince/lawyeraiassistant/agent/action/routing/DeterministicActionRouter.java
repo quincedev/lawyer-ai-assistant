@@ -11,7 +11,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.ToolAction;
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalToolContract;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 
 @Component
 public class DeterministicActionRouter {

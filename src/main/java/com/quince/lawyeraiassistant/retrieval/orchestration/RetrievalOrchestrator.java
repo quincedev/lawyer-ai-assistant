@@ -8,7 +8,7 @@ import com.quince.lawyeraiassistant.cache.retrieval.RetrievalCache;
 import com.quince.lawyeraiassistant.performance.PerformanceTimer;
 import com.quince.lawyeraiassistant.query.model.QueryContext;
 import com.quince.lawyeraiassistant.query.pipeline.QueryPipeline;
-import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
+import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.pipeline.RetrieverPipeline;
 

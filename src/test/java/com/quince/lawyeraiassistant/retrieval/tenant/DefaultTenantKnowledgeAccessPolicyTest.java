@@ -1,4 +1,4 @@
-package com.quince.lawyeraiassistant.rag.vector.tenant;
+package com.quince.lawyeraiassistant.retrieval.tenant;
 
 import java.util.Map;
 

@@ -4,6 +4,7 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolExecutionResult;
 import com.quince.lawyeraiassistant.agent.tool.AgentTool;
 import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;

@@ -17,9 +17,14 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
+import com.quince.lawyeraiassistant.agent.runtime.action.DefaultAgentActionCoordinator;
+import com.quince.lawyeraiassistant.agent.runtime.evidence.DefaultAgentEvidencePolicy;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
+import com.quince.lawyeraiassistant.agent.runtime.observability.DefaultAgentExecutionObserver;
+import com.quince.lawyeraiassistant.agent.runtime.policy.DefaultAgentExecutionPolicyFacade;
+import com.quince.lawyeraiassistant.agent.runtime.resource.DefaultAgentContextSizeEstimator;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
@@ -92,6 +97,8 @@ class DefaultAgentRuntimeTest {
 
         private RuntimeResourceGuardrailService runtimeResourceGuardrailService;
 
+        private DefaultAgentExecutionPolicyFacade executionPolicy;
+
         private LegalEvidenceTrustPolicy legalEvidenceTrustPolicy;
 
         private SecurityAuditLogger securityAuditLogger;
@@ -153,6 +160,12 @@ class DefaultAgentRuntimeTest {
                                                 new ObservationLengthRuntimeResourcePolicy(),
                                                 new ContextLengthRuntimeResourcePolicy()),
                                 executionLimits);
+
+                executionPolicy = new DefaultAgentExecutionPolicyFacade(
+                                executionLimits,
+                                runtimeGuardrailService,
+                                runtimeResourceGuardrailService,
+                                securityAuditLogger);
 
                 legalEvidenceTrustPolicy = new LegalEvidenceTrustPolicy();
         }
@@ -1772,23 +1785,17 @@ class DefaultAgentRuntimeTest {
                                 () -> new DefaultAgentRuntime(
                                                 agentPipeline,
                                                 null,
-                                                actionSelector,
-                                                actionExecutionOperator,
                                                 reflectionService,
                                                 replanningService,
                                                 finalAnswerService,
-                                                executionLimits,
-                                                runtimeGuardrailService,
-                                                runtimeResourceGuardrailService,
-                                                legalEvidenceTrustPolicy,
-                                                securityAuditLogger,
-                                                new DuplicateToolCallPolicy(),
-                                                new DeterministicActionRouter(),
+                                                executionPolicy,
+                                                new DefaultAgentEvidencePolicy(
+                                                                legalEvidenceTrustPolicy,
+                                                                securityAuditLogger),
+                                                new DefaultAgentContextSizeEstimator(),
                                                 new NoProgressRetryPolicy(),
-                                                new AgentPerformanceContext(),
-                                                ignored -> List.of(),
-                                                micrometerMetrics,
-                                                performanceSnapshotRecorder));
+                                                actionCoordinator(),
+                                                executionObserver()));
 
                 assertEquals(
                                 "skillSelector must not be null",
@@ -2500,26 +2507,44 @@ class DefaultAgentRuntimeTest {
                                                 new ContextLengthRuntimeResourcePolicy()),
                                 limits);
 
-                return new DefaultAgentRuntime(
-                                agentPipeline,
-                                skillSelector,
-                                actionSelector,
-                                actionExecutionOperator,
-                                reflectionService,
-                                replanningService,
-                                finalAnswerService,
+                DefaultAgentExecutionPolicyFacade executionPolicy = new DefaultAgentExecutionPolicyFacade(
                                 limits,
                                 runtimeGuardrailService,
                                 resourceGuardrailService,
-                                legalEvidenceTrustPolicy,
-                                securityAuditLogger,
-                                new DuplicateToolCallPolicy(),
-                                new DeterministicActionRouter(),
+                                securityAuditLogger);
+
+                return new DefaultAgentRuntime(
+                                agentPipeline,
+                                skillSelector,
+                                reflectionService,
+                                replanningService,
+                                finalAnswerService,
+                                executionPolicy,
+                                new DefaultAgentEvidencePolicy(
+                                                legalEvidenceTrustPolicy,
+                                                securityAuditLogger),
+                                new DefaultAgentContextSizeEstimator(),
                                 new NoProgressRetryPolicy(),
+                                actionCoordinator(),
+                                executionObserver());
+        }
+
+        private DefaultAgentExecutionObserver executionObserver() {
+
+                return new DefaultAgentExecutionObserver(
                                 new AgentPerformanceContext(),
                                 ignored -> List.of(),
                                 micrometerMetrics,
                                 performanceSnapshotRecorder);
+        }
+
+        private DefaultAgentActionCoordinator actionCoordinator() {
+
+                return new DefaultAgentActionCoordinator(
+                                actionSelector,
+                                actionExecutionOperator,
+                                new DeterministicActionRouter(),
+                                new DuplicateToolCallPolicy());
         }
 
         private DefaultAgentRuntime runtime(

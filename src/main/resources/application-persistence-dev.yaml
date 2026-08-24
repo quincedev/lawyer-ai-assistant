@@ -1,0 +1,17 @@
+spring:
+    flyway:
+        enabled: true
+        locations:
+            - classpath:db/migration
+            - classpath:db/dev-seed
+        validate-on-migrate: true
+        clean-disabled: true
+
+app:
+    security:
+        identity:
+            store: mybatis
+
+    rag:
+        knowledge-base:
+            enabled: false

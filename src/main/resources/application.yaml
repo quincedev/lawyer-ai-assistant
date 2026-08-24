@@ -2,6 +2,16 @@ spring:
   application:
     name: lawyer-ai-assistant
 
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3307/lawyer_ai_assistant?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    # Step 5D 完成迁移与 Profile 集成前暂不自动执行。
+    enabled: false
+
   ai:
     # =========================================================
     # Model
@@ -61,6 +71,11 @@ spring:
 # Application Configuration
 # =============================================================
 app:
+  security:
+    identity:
+      # 默认开发模式继续使用内存账号。
+      store: in-memory
+
   # ===========================================================
   # AI Cache
   # ===========================================================
@@ -265,3 +280,10 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+mybatis:
+  mapper-locations:
+    - classpath*:mapper/**/*.xml
+
+  configuration:
+    map-underscore-to-camel-case: true

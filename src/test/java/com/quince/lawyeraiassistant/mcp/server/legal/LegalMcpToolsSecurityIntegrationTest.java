@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalToolContract;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;

@@ -2,7 +2,7 @@ package com.quince.lawyeraiassistant.cache.tool;
 
 import org.springframework.stereotype.Component;
 
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalToolContract;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 
 @Component
 public class ToolCachePolicy {

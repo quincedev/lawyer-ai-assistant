@@ -1,9 +1,6 @@
 package com.quince.lawyeraiassistant.agent.runtime;
 
-import com.quince.lawyeraiassistant.agent.action.AgentActionSelector;
-import com.quince.lawyeraiassistant.agent.action.policy.DuplicateToolCallPolicy;
 import com.quince.lawyeraiassistant.agent.action.policy.NoProgressRetryPolicy;
-import com.quince.lawyeraiassistant.agent.action.routing.DeterministicActionRouter;
 import com.quince.lawyeraiassistant.agent.model.AgentAction;
 import com.quince.lawyeraiassistant.agent.model.AgentActionExecutionResult;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
@@ -14,13 +11,15 @@ import com.quince.lawyeraiassistant.agent.model.AgentTaskStatus;
 import com.quince.lawyeraiassistant.agent.model.ReflectionResult;
 import com.quince.lawyeraiassistant.agent.model.RuntimeReasonObservation;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
-import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
-import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
-import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceMetrics;
-import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshot;
-import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
-import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
+import com.quince.lawyeraiassistant.agent.runtime.action.AgentActionCoordinator;
+import com.quince.lawyeraiassistant.agent.runtime.evidence.AgentEvidencePolicy;
+import com.quince.lawyeraiassistant.agent.runtime.evidence.EvidenceValidationResult;
+import com.quince.lawyeraiassistant.agent.runtime.observability.AgentExecutionObservation;
+import com.quince.lawyeraiassistant.agent.runtime.observability.AgentExecutionObserver;
+import com.quince.lawyeraiassistant.agent.runtime.observability.AgentExecutionStatus;
+import com.quince.lawyeraiassistant.agent.runtime.policy.AgentExecutionPolicyFacade;
+import com.quince.lawyeraiassistant.agent.runtime.resource.AgentContextSizeEstimator;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
@@ -31,21 +30,12 @@ import com.quince.lawyeraiassistant.agent.stream.AgentStreamEventType;
 import com.quince.lawyeraiassistant.agent.stream.AgentStreamPublisher;
 import com.quince.lawyeraiassistant.agent.stream.NoOpAgentStreamPublisher;
 import com.quince.lawyeraiassistant.performance.PerformanceTimer;
-import com.quince.lawyeraiassistant.security.audit.SecurityAuditEvent;
-import com.quince.lawyeraiassistant.security.audit.SecurityAuditEventType;
-import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
 import com.quince.lawyeraiassistant.security.legal.SecurityTrustLevel;
-import com.quince.lawyeraiassistant.security.legal.evidence.LegalEvidenceTrustPolicy;
 import com.quince.lawyeraiassistant.security.runtime.AgentExecutionBudget;
-import com.quince.lawyeraiassistant.security.runtime.AgentExecutionLimits;
 import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailOperation;
 import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailResult;
-import com.quince.lawyeraiassistant.security.runtime.RuntimeGuardrailService;
-import com.quince.lawyeraiassistant.security.runtime.performance.PerformanceGuardrailService;
-import com.quince.lawyeraiassistant.security.runtime.performance.PerformanceGuardrailResult;
-import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceGuardrailService;
 import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceResult;
 import com.quince.lawyeraiassistant.security.runtime.resource.RuntimeResourceType;
 
@@ -53,10 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 @Component
 public class DefaultAgentRuntime
@@ -69,10 +56,6 @@ public class DefaultAgentRuntime
 
         private final AgentPipeline agentPipeline;
 
-        private final AgentActionSelector actionSelector;
-
-        private final AgentActionExecutionOperator actionExecutionOperator;
-
         private final AgentReflectionService reflectionService;
 
         private final AgentReplanningService replanningService;
@@ -81,50 +64,30 @@ public class DefaultAgentRuntime
 
         private final AgentSkillSelector skillSelector;
 
-        private final AgentExecutionLimits executionLimits;
+        private final AgentEvidencePolicy evidencePolicy;
 
-        private final RuntimeGuardrailService runtimeGuardrailService;
-
-        private final RuntimeResourceGuardrailService runtimeResourceGuardrailService;
-
-        private final LegalEvidenceTrustPolicy legalEvidenceTrustPolicy;
-
-        private final SecurityAuditLogger securityAuditLogger;
-
-        private final DuplicateToolCallPolicy duplicateToolCallPolicy;
-
-        private final DeterministicActionRouter deterministicActionRouter;
+        private final AgentContextSizeEstimator contextSizeEstimator;
 
         private final NoProgressRetryPolicy noProgressRetryPolicy;
 
-        private final AgentPerformanceContext performanceContext;
+        private final AgentExecutionPolicyFacade executionPolicy;
 
-        private final PerformanceGuardrailService performanceGuardrailService;
+        private final AgentActionCoordinator actionCoordinator;
 
-        private final AgentMicrometerMetrics micrometerMetrics;
-
-        private final AgentPerformanceSnapshotRecorder performanceSnapshotRecorder;
+        private final AgentExecutionObserver executionObserver;
 
         public DefaultAgentRuntime(
                         AgentPipeline agentPipeline,
                         AgentSkillSelector skillSelector,
-                        AgentActionSelector actionSelector,
-                        AgentActionExecutionOperator actionExecutionOperator,
                         AgentReflectionService reflectionService,
                         AgentReplanningService replanningService,
                         AgentFinalAnswerService finalAnswerService,
-                        AgentExecutionLimits executionLimits,
-                        RuntimeGuardrailService runtimeGuardrailService,
-                        RuntimeResourceGuardrailService runtimeResourceGuardrailService,
-                        LegalEvidenceTrustPolicy legalEvidenceTrustPolicy,
-                        SecurityAuditLogger securityAuditLogger,
-                        DuplicateToolCallPolicy duplicateToolCallPolicy,
-                        DeterministicActionRouter deterministicActionRouter,
+                        AgentExecutionPolicyFacade executionPolicy,
+                        AgentEvidencePolicy evidencePolicy,
+                        AgentContextSizeEstimator contextSizeEstimator,
                         NoProgressRetryPolicy noProgressRetryPolicy,
-                        AgentPerformanceContext performanceContext,
-                        PerformanceGuardrailService performanceGuardrailService,
-                        AgentMicrometerMetrics micrometerMetrics,
-                        AgentPerformanceSnapshotRecorder performanceSnapshotRecorder) {
+                        AgentActionCoordinator actionCoordinator,
+                        AgentExecutionObserver executionObserver) {
 
                 this.agentPipeline = Objects.requireNonNull(
                                 agentPipeline,
@@ -133,14 +96,6 @@ public class DefaultAgentRuntime
                 this.skillSelector = Objects.requireNonNull(
                                 skillSelector,
                                 "skillSelector must not be null");
-
-                this.actionSelector = Objects.requireNonNull(
-                                actionSelector,
-                                "actionSelector must not be null");
-
-                this.actionExecutionOperator = Objects.requireNonNull(
-                                actionExecutionOperator,
-                                "actionExecutionOperator must not be null");
 
                 this.reflectionService = Objects.requireNonNull(
                                 reflectionService,
@@ -154,53 +109,29 @@ public class DefaultAgentRuntime
                                 finalAnswerService,
                                 "finalAnswerService must not be null");
 
-                this.executionLimits = Objects.requireNonNull(
-                                executionLimits,
-                                "executionLimits must not be null");
+                this.executionPolicy = Objects.requireNonNull(
+                                executionPolicy,
+                                "executionPolicy must not be null");
 
-                this.runtimeGuardrailService = Objects.requireNonNull(
-                                runtimeGuardrailService,
-                                "runtimeGuardrailService must not be null");
+                this.evidencePolicy = Objects.requireNonNull(
+                                evidencePolicy,
+                                "evidencePolicy must not be null");
 
-                this.runtimeResourceGuardrailService = Objects.requireNonNull(
-                                runtimeResourceGuardrailService,
-                                "runtimeResourceGuardrailService must not be null");
-
-                this.legalEvidenceTrustPolicy = Objects.requireNonNull(
-                                legalEvidenceTrustPolicy,
-                                "legalEvidenceTrustPolicy must not be null");
-
-                this.securityAuditLogger = Objects.requireNonNull(
-                                securityAuditLogger,
-                                "securityAuditLogger must not be null");
-
-                this.duplicateToolCallPolicy = Objects.requireNonNull(
-                                duplicateToolCallPolicy,
-                                "duplicateToolCallPolicy must not be null");
-
-                this.deterministicActionRouter = Objects.requireNonNull(
-                                deterministicActionRouter,
-                                "deterministicActionRouter must not be null");
+                this.contextSizeEstimator = Objects.requireNonNull(
+                                contextSizeEstimator,
+                                "contextSizeEstimator must not be null");
 
                 this.noProgressRetryPolicy = Objects.requireNonNull(
                                 noProgressRetryPolicy,
                                 "noProgressRetryPolicy must not be null");
 
-                this.performanceContext = Objects.requireNonNull(
-                                performanceContext,
-                                "AgentPerformanceContext must not be null");
+                this.actionCoordinator = Objects.requireNonNull(
+                                actionCoordinator,
+                                "actionCoordinator must not be null");
 
-                this.performanceGuardrailService = Objects.requireNonNull(
-                                performanceGuardrailService,
-                                "PerformanceGuardrailService must not be null");
-
-                this.micrometerMetrics = Objects.requireNonNull(
-                                micrometerMetrics,
-                                "AgentMicrometerMetrics must not be null");
-
-                this.performanceSnapshotRecorder = Objects.requireNonNull(
-                                performanceSnapshotRecorder,
-                                "AgentPerformanceSnapshotRecorder must not be null");
+                this.executionObserver = Objects.requireNonNull(
+                                executionObserver,
+                                "executionObserver must not be null");
         }
 
         @Override
@@ -225,13 +156,11 @@ public class DefaultAgentRuntime
                                 publisher,
                                 "AgentStreamPublisher must not be null");
 
-                long startedAt = System.nanoTime();
-
                 AgentContext result = null;
 
-                RuntimeExecutionStatus executionStatus = RuntimeExecutionStatus.FAILED;
+                AgentExecutionStatus executionStatus = AgentExecutionStatus.FAILED;
 
-                AgentPerformanceMetrics performanceMetrics = performanceContext.start();
+                AgentExecutionObservation observation = executionObserver.start();
 
                 try {
 
@@ -244,7 +173,7 @@ public class DefaultAgentRuntime
                                         context,
                                         publisher);
 
-                        executionStatus = RuntimeExecutionStatus.SUCCESS;
+                        executionStatus = AgentExecutionStatus.SUCCESS;
 
                         return result;
 
@@ -259,43 +188,11 @@ public class DefaultAgentRuntime
 
                 } finally {
 
-                        long durationMs = TimeUnit.NANOSECONDS.toMillis(
-                                        System.nanoTime()
-                                                        - startedAt);
-
-                        logAgentExecutionFinished(
+                        executionObserver.complete(
+                                        observation,
                                         context,
                                         result,
-                                        executionStatus,
-                                        durationMs);
-
-                        try {
-
-                                AgentPerformanceSnapshot snapshot = performanceMetrics.snapshot();
-
-                                performanceSnapshotRecorder.record(
-                                                snapshot);
-
-                                logPerformanceSummary(
-                                                snapshot);
-
-                                micrometerMetrics.recordExecution(
-                                                snapshot);
-
-                                List<PerformanceGuardrailResult> guardrailResults = performanceGuardrailService
-                                                .evaluate(
-                                                                snapshot);
-
-                                guardrailResults.forEach(
-                                                this::logPerformanceGuardrailResult);
-
-                                micrometerMetrics.recordGuardrailResults(
-                                                guardrailResults);
-
-                        } finally {
-
-                                performanceContext.clear();
-                        }
+                                        executionStatus);
                 }
         }
 
@@ -308,8 +205,7 @@ public class DefaultAgentRuntime
                  * DefaultAgentRuntime 是 Singleton Bean，
                  * 所以 Budget 绝不能放到成员变量中。
                  */
-                AgentExecutionBudget budget = new AgentExecutionBudget(
-                                executionLimits);
+                AgentExecutionBudget budget = executionPolicy.createBudget();
 
                 AgentContext skillAwareContext = attachSelectedSkill(
                                 context);
@@ -369,15 +265,11 @@ public class DefaultAgentRuntime
                          * 1. STEP Guardrail
                          * =================================================
                          */
-                        RuntimeGuardrailResult stepDecision = runtimeGuardrailService.evaluate(
+                        RuntimeGuardrailResult stepDecision = executionPolicy.evaluateRuntime(
                                         RuntimeGuardrailOperation.STEP,
                                         budget);
 
                         if (stepDecision.isDenied()) {
-
-                                auditRuntimeLimit(
-                                                RuntimeGuardrailOperation.STEP,
-                                                stepDecision);
 
                                 return finishWithFallback(
                                                 current,
@@ -396,20 +288,15 @@ public class DefaultAgentRuntime
                          * Context 一旦超限，不再调用模型生成 fallback，
                          * 避免使用已经超大的 Context 再触发一次 LLM 调用。
                          */
-                        int contextLength = estimateContextLength(
+                        int contextLength = contextSizeEstimator.estimate(
                                         current);
 
-                        RuntimeResourceResult contextDecision = runtimeResourceGuardrailService.evaluate(
+                        RuntimeResourceResult contextDecision = executionPolicy.evaluateResource(
                                         RuntimeResourceType.CONTEXT,
-                                        contextLength);
+                                        contextLength,
+                                        null);
 
                         if (contextDecision.isDenied()) {
-
-                                auditResourceLimit(
-                                                RuntimeResourceType.CONTEXT,
-                                                contextLength,
-                                                contextDecision,
-                                                null);
 
                                 return finishWithoutModel(
                                                 current,
@@ -452,18 +339,9 @@ public class DefaultAgentRuntime
                          * =================================================
                          */
 
-                        AgentAction action = resolveAction(
+                        AgentAction action = actionCoordinator.selectAction(
                                         current,
                                         runningTask);
-
-                        Objects.requireNonNull(
-                                        action,
-                                        "AgentAction must not be null");
-
-                        action = applyDuplicateToolCallGuard(
-                                        current,
-                                        runningTask,
-                                        action);
 
                         /*
                          * =================================================
@@ -482,15 +360,11 @@ public class DefaultAgentRuntime
                          */
                         if (action.isTool()) {
 
-                                RuntimeGuardrailResult toolCallDecision = runtimeGuardrailService.evaluate(
+                                RuntimeGuardrailResult toolCallDecision = executionPolicy.evaluateRuntime(
                                                 RuntimeGuardrailOperation.TOOL_CALL,
                                                 budget);
 
                                 if (toolCallDecision.isDenied()) {
-
-                                        auditRuntimeLimit(
-                                                        RuntimeGuardrailOperation.TOOL_CALL,
-                                                        toolCallDecision);
 
                                         return finishWithFallback(
                                                         current,
@@ -522,7 +396,7 @@ public class DefaultAgentRuntime
                                                                 "正在分析当前任务"));
                         }
 
-                        AgentActionExecutionResult result = actionExecutionOperator.execute(
+                        AgentActionExecutionResult result = actionCoordinator.executeAction(
                                         current,
                                         runningTask,
                                         action);
@@ -643,9 +517,7 @@ public class DefaultAgentRuntime
                                                 current,
                                                 runningTask)) {
 
-                                        performanceContext.current()
-                                                        .ifPresent(
-                                                                        AgentPerformanceMetrics::recordNoProgressSuppression);
+                                        executionObserver.recordNoProgressSuppression();
 
                                         log.warn(
                                                         "No-progress retry suppressed. taskId={}, reason=IDENTICAL_TOOL_EVIDENCE",
@@ -666,15 +538,11 @@ public class DefaultAgentRuntime
 
                                 } else {
 
-                                        RuntimeGuardrailResult retryDecision = runtimeGuardrailService.evaluate(
+                                        RuntimeGuardrailResult retryDecision = executionPolicy.evaluateRuntime(
                                                         RuntimeGuardrailOperation.RETRY,
                                                         budget);
 
                                         if (retryDecision.isDenied()) {
-
-                                                auditRuntimeLimit(
-                                                                RuntimeGuardrailOperation.RETRY,
-                                                                retryDecision);
 
                                                 return finishWithFallback(
                                                                 current,
@@ -684,10 +552,7 @@ public class DefaultAgentRuntime
 
                                         budget.recordRetry();
 
-                                        performanceContext
-                                                        .current()
-                                                        .ifPresent(
-                                                                        metrics -> metrics.recordRetry());
+                                        executionObserver.recordRetry();
                                 }
                         }
 
@@ -698,15 +563,11 @@ public class DefaultAgentRuntime
                          */
                         if (reflectionResult.shouldReplan()) {
 
-                                RuntimeGuardrailResult replanDecision = runtimeGuardrailService.evaluate(
+                                RuntimeGuardrailResult replanDecision = executionPolicy.evaluateRuntime(
                                                 RuntimeGuardrailOperation.REPLAN,
                                                 budget);
 
                                 if (replanDecision.isDenied()) {
-
-                                        auditRuntimeLimit(
-                                                        RuntimeGuardrailOperation.REPLAN,
-                                                        replanDecision);
 
                                         return finishWithFallback(
                                                         current,
@@ -825,52 +686,33 @@ public class DefaultAgentRuntime
                         AgentTask task,
                         ToolObservation observation) {
 
-                try {
+                EvidenceValidationResult evidenceDecision = evidencePolicy.validate(
+                                task,
+                                observation);
 
-                        legalEvidenceTrustPolicy.validate(
-                                        observation);
-
-                } catch (RuntimeException exception) {
-
-                        securityAuditLogger.log(
-                                        SecurityAuditEvent.warn(
-                                                        SecurityAuditEventType.EVIDENCE_TRUST_REJECTED,
-                                                        "DefaultAgentRuntime",
-                                                        "Evidence trust boundary rejected tool result",
-                                                        Map.of(
-                                                                        "taskId",
-                                                                        task.getId(),
-                                                                        "toolName",
-                                                                        observation == null
-                                                                                        ? "unknown"
-                                                                                        : observation.getToolName())));
+                if (!evidenceDecision.accepted()) {
 
                         return updateTaskStatus(
                                         context,
                                         task.getId(),
                                         AgentTaskStatus.FAILED)
                                         .appendExecutionLog(
-                                                        "Evidence trust boundary rejected tool result");
+                                                        evidenceDecision.reason());
                 }
 
                 Objects.requireNonNull(
                                 observation,
                                 "ToolObservation must not be null");
 
-                int observationLength = resolveObservationLength(
+                int observationLength = contextSizeEstimator.estimateObservation(
                                 observation);
 
-                RuntimeResourceResult resourceDecision = runtimeResourceGuardrailService.evaluate(
+                RuntimeResourceResult resourceDecision = executionPolicy.evaluateResource(
                                 RuntimeResourceType.OBSERVATION,
-                                observationLength);
+                                observationLength,
+                                task.getId());
 
                 if (resourceDecision.isDenied()) {
-
-                        auditResourceLimit(
-                                        RuntimeResourceType.OBSERVATION,
-                                        observationLength,
-                                        resourceDecision,
-                                        task.getId());
 
                         ToolObservation protectedObservation = ToolObservation.failure(
                                         task.getId(),
@@ -915,20 +757,15 @@ public class DefaultAgentRuntime
                         AgentTask task,
                         String content) {
 
-                int observationLength = lengthOf(
+                int observationLength = contextSizeEstimator.estimateText(
                                 content);
 
-                RuntimeResourceResult resourceDecision = runtimeResourceGuardrailService.evaluate(
+                RuntimeResourceResult resourceDecision = executionPolicy.evaluateResource(
                                 RuntimeResourceType.OBSERVATION,
-                                observationLength);
+                                observationLength,
+                                task.getId());
 
                 if (resourceDecision.isDenied()) {
-
-                        auditResourceLimit(
-                                        RuntimeResourceType.OBSERVATION,
-                                        observationLength,
-                                        resourceDecision,
-                                        task.getId());
 
                         return updateTaskStatus(
                                         context,
@@ -1189,278 +1026,11 @@ public class DefaultAgentRuntime
                                                 AGENT_FINISHED_LOG);
         }
 
-        private int resolveObservationLength(
-                        ToolObservation observation) {
-
-                if (observation.isSuccess()) {
-
-                        String content = observation.getContent();
-
-                        return content == null
-                                        ? 0
-                                        : content.length();
-                }
-
-                String errorMessage = observation.getErrorMessage();
-
-                return errorMessage == null
-                                ? 0
-                                : errorMessage.length();
-        }
-
-        private int estimateContextLength(
-                        AgentContext context) {
-
-                Objects.requireNonNull(
-                                context,
-                                "AgentContext must not be null");
-
-                long length = 0L;
-
-                length += lengthOf(
-                                context.getGoal());
-
-                if (context.getReasonResult() != null) {
-
-                        length += lengthOf(
-                                        context.getReasonResult()
-                                                        .getReasonSummary());
-                }
-
-                for (AgentTask task : context.getAgentPlan()
-                                .getTasks()) {
-
-                        length += lengthOf(
-                                        task.getId());
-
-                        length += lengthOf(
-                                        task.getDescription());
-
-                        if (task.getStatus() != null) {
-
-                                length += task.getStatus()
-                                                .name()
-                                                .length();
-                        }
-                }
-
-                for (ToolObservation observation : context.getObservations()) {
-
-                        length += lengthOf(
-                                        observation.getTaskId());
-
-                        length += lengthOf(
-                                        observation.getToolName());
-
-                        length += resolveObservationLength(
-                                        observation);
-                }
-
-                for (RuntimeReasonObservation observation : context.getRuntimeReasonObservations()) {
-
-                        length += lengthOf(
-                                        observation.getTaskId());
-
-                        length += lengthOf(
-                                        observation.getContent());
-                }
-
-                for (String executionLog : context.getExecutionLogs()) {
-
-                        length += lengthOf(
-                                        executionLog);
-                }
-
-                length += lengthOf(
-                                context.getFinalAnswer());
-
-                if (context.hasSkill()) {
-
-                        SkillContext skillContext = context.getSkillContext()
-                                        .orElseThrow();
-
-                        length += lengthOf(
-                                        skillContext.getSkillId());
-
-                        length += lengthOf(
-                                        skillContext.getSkillName());
-
-                        length += lengthOf(
-                                        skillContext.getDescription());
-
-                        length += lengthOf(
-                                        skillContext.getInstructions());
-
-                        for (String toolName : skillContext.getAllowedTools()) {
-
-                                length += lengthOf(
-                                                toolName);
-                        }
-                }
-
-                return length > Integer.MAX_VALUE
-                                ? Integer.MAX_VALUE
-                                : (int) length;
-        }
-
-        private int lengthOf(
-                        String value) {
-
-                return value == null
-                                ? 0
-                                : value.length();
-        }
-
-        private void auditRuntimeLimit(
-                        RuntimeGuardrailOperation operation,
-                        RuntimeGuardrailResult result) {
-
-                securityAuditLogger.log(
-                                SecurityAuditEvent.warn(
-                                                SecurityAuditEventType.RUNTIME_LIMIT_REACHED,
-                                                "DefaultAgentRuntime",
-                                                result.reason(),
-                                                Map.of(
-                                                                "operation",
-                                                                operation.name(),
-                                                                "policyName",
-                                                                result.policyName())));
-        }
-
-        private void auditResourceLimit(
-                        RuntimeResourceType resourceType,
-                        int actualLength,
-                        RuntimeResourceResult result,
-                        String taskId) {
-
-                Map<String, String> metadata = new java.util.HashMap<>();
-
-                metadata.put(
-                                "resourceType",
-                                resourceType.name());
-
-                metadata.put(
-                                "actualLength",
-                                String.valueOf(
-                                                actualLength));
-
-                metadata.put(
-                                "policyName",
-                                result.policyName());
-
-                if (taskId != null
-                                && !taskId.isBlank()) {
-
-                        metadata.put(
-                                        "taskId",
-                                        taskId);
-                }
-
-                securityAuditLogger.log(
-                                SecurityAuditEvent.warn(
-                                                SecurityAuditEventType.RESOURCE_LIMIT_REACHED,
-                                                "DefaultAgentRuntime",
-                                                result.reason(),
-                                                metadata));
-        }
-
         /*
          * =========================================================
          * Performance Baseline
          * =========================================================
          */
-
-        private void logAgentExecutionFinished(
-                        AgentContext initialContext,
-                        AgentContext result,
-                        RuntimeExecutionStatus executionStatus,
-                        long durationMs) {
-
-                String tenantId = initialContext.getTenantContext() == null
-                                ? "unknown"
-                                : initialContext.getTenantContext()
-                                                .tenantId();
-
-                AgentStatus agentStatus = result == null
-                                ? null
-                                : result.getStatus();
-
-                log.info(
-                                "Agent execution finished. tenantId={}, executionStatus={}, agentStatus={}, durationMs={}",
-                                tenantId,
-                                executionStatus,
-                                agentStatus,
-                                durationMs);
-        }
-
-        private void logPerformanceSummary(
-                        AgentPerformanceSnapshot snapshot) {
-
-                log.info(
-                                "Agent performance summary. "
-                                                + "totalDurationMs={}, "
-                                                + "llmCalls={}, "
-                                                + "llmDurationMs={}, "
-                                                + "llmRatio={}, "
-                                                + "toolCalls={}, "
-                                                + "toolDurationMs={}, "
-                                                + "mcpCalls={}, "
-                                                + "mcpDurationMs={}, "
-                                                + "cacheHits={}, "
-                                                + "cacheMisses={}, "
-                                                + "cacheHitRatio={}, "
-                                                + "evidenceOriginalChars={}, "
-                                                + "evidenceCompactedChars={}, "
-                                                + "evidenceReductionRatio={}, "
-                                                + "retries={}, "
-                                                + "noProgressSuppressions={}",
-                                snapshot.totalDurationMs(),
-                                snapshot.llmCalls(),
-                                snapshot.llmDurationMs(),
-                                snapshot.llmDurationRatio(),
-                                snapshot.toolCalls(),
-                                snapshot.toolDurationMs(),
-                                snapshot.mcpCalls(),
-                                snapshot.mcpDurationMs(),
-                                snapshot.cacheHits(),
-                                snapshot.cacheMisses(),
-                                snapshot.cacheHitRatio(),
-                                snapshot.evidenceOriginalChars(),
-                                snapshot.evidenceCompactedChars(),
-                                snapshot.evidenceReductionRatio(),
-                                snapshot.retries(),
-                                snapshot.noProgressSuppressions());
-        }
-
-        private void logPerformanceGuardrailResult(
-                        PerformanceGuardrailResult result) {
-
-                if (result.isCritical()) {
-
-                        log.error(
-                                        "Agent performance guardrail critical. metric={}, actual={}, threshold={}, reason={}",
-                                        result.metric(),
-                                        result.actual(),
-                                        result.threshold(),
-                                        result.reason());
-
-                } else if (result.isWarn()) {
-
-                        log.warn(
-                                        "Agent performance guardrail warning. metric={}, actual={}, threshold={}, reason={}",
-                                        result.metric(),
-                                        result.actual(),
-                                        result.threshold(),
-                                        result.reason());
-                }
-        }
-
-        private enum RuntimeExecutionStatus {
-
-                SUCCESS,
-
-                FAILED
-        }
 
         private <T> T measureStage(
                         String stage,
@@ -1480,67 +1050,4 @@ public class DefaultAgentRuntime
                                         timer.elapsedMillis());
                 }
         }
-
-        private AgentAction applyDuplicateToolCallGuard(
-                        AgentContext context,
-                        AgentTask currentTask,
-                        AgentAction action) {
-
-                if (action == null
-                                || !action.isTool()) {
-
-                        return action;
-                }
-
-                String toolName = action.requireToolAction()
-                                .getToolName();
-
-                if (!duplicateToolCallPolicy.shouldBlock(
-                                context,
-                                currentTask,
-                                toolName)) {
-
-                        return action;
-                }
-
-                log.warn(
-                                "Duplicate tool call blocked. taskId={}, toolName={}",
-                                currentTask.getId(),
-                                toolName);
-
-                return AgentAction.reason(
-                                currentTask.getId());
-        }
-
-        private AgentAction resolveAction(
-                        AgentContext context,
-                        AgentTask task) {
-
-                return deterministicActionRouter
-                                .route(
-                                                context,
-                                                task)
-                                .map(
-                                                action -> {
-
-                                                        log.info(
-                                                                        "Deterministic action selected. taskId={}, actionType={}",
-                                                                        task.getId(),
-                                                                        action.getType());
-
-                                                        return action;
-                                                })
-                                .orElseGet(
-                                                () -> {
-
-                                                        AgentContext actionSelectionContext = context;
-
-                                                        return measureStage(
-                                                                        "ACTION_SELECTION",
-                                                                        () -> actionSelector.select(
-                                                                                        actionSelectionContext,
-                                                                                        task));
-                                                });
-        }
-
 }

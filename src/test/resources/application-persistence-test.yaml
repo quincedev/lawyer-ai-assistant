@@ -1,0 +1,16 @@
+spring:
+    flyway:
+        enabled: true
+        locations:
+            - classpath:db/migration
+        validate-on-migrate: true
+        clean-disabled: true
+
+    test:
+        database:
+            replace: NONE
+
+app:
+    rag:
+        knowledge-base:
+            enabled: false

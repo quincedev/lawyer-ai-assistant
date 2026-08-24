@@ -1,6 +1,6 @@
 package com.quince.lawyeraiassistant.retrieval.operator;
 
-import com.quince.lawyeraiassistant.rag.vector.tenant.TenantKnowledgeAccessPolicy;
+import com.quince.lawyeraiassistant.retrieval.tenant.TenantKnowledgeAccessPolicy;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.parent.provider.ParentDocumentProvider;
 

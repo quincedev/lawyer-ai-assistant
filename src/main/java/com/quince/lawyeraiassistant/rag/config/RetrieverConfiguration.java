@@ -6,6 +6,8 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
+
 @Configuration
 public class RetrieverConfiguration {
 

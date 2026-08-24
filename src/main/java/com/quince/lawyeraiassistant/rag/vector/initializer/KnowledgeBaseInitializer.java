@@ -2,10 +2,11 @@ package com.quince.lawyeraiassistant.rag.vector.initializer;
 
 import com.quince.lawyeraiassistant.common.exception.ErrorCode;
 import com.quince.lawyeraiassistant.common.exception.KnowledgeBaseException;
-import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
 import com.quince.lawyeraiassistant.rag.vector.config.KnowledgeBaseProperties;
 import com.quince.lawyeraiassistant.rag.vector.service.DocumentLoadingService;
 import com.quince.lawyeraiassistant.rag.vector.service.VectorSearchService;
+import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;

@@ -9,8 +9,8 @@ import org.springframework.stereotype.Service;
 
 import com.quince.lawyeraiassistant.common.exception.ErrorCode;
 import com.quince.lawyeraiassistant.common.exception.KnowledgeBaseException;
-import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
-import com.quince.lawyeraiassistant.rag.vector.tenant.TenantKnowledgeFilterFactory;
+import com.quince.lawyeraiassistant.retrieval.tenant.TenantKnowledgeFilterFactory;
+import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
 
 import java.util.List;
 import java.util.Objects;

@@ -4,6 +4,9 @@ import com.quince.lawyeraiassistant.agent.tool.AgentTool;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.tool.legal.evidence.LegalEvidenceCompactor;
+import com.quince.lawyeraiassistant.agent.tool.legal.cache.DefaultLegalToolCache;
+import com.quince.lawyeraiassistant.agent.tool.legal.mcp.SpringAiLegalKnowledgeMcpClient;
+import com.quince.lawyeraiassistant.agent.tool.legal.mcp.result.DefaultMcpLegalResultProcessor;
 import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
 import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
 import com.quince.lawyeraiassistant.cache.tool.ToolCachePolicy;
@@ -202,6 +205,9 @@ class LegalToolModeRegistrationTest {
         @Import({
                         LegalKnowledgeTool.class,
                         McpLegalKnowledgeTool.class,
+                        DefaultLegalToolCache.class,
+                        SpringAiLegalKnowledgeMcpClient.class,
+                        DefaultMcpLegalResultProcessor.class,
                         AgentToolRegistry.class
         })
         static class ToolModeTestConfiguration {

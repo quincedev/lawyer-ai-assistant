@@ -12,7 +12,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentActionType;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
-import com.quince.lawyeraiassistant.agent.tool.legal.LegalToolContract;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 
 class DeterministicActionRouterTest {
 

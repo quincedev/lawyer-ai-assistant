@@ -1,4 +1,4 @@
-package com.quince.lawyeraiassistant.rag.config;
+package com.quince.lawyeraiassistant.retrieval.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -14,7 +14,8 @@ public record RetrievalProperties(
         @Min(1) 
         int topK,
 
-        @DecimalMin("0.0") @DecimalMax("1.0") 
+        @DecimalMin("0.0") 
+        @DecimalMax("1.0") 
         double similarityThreshold
 
 ) {

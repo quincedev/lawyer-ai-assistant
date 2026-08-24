@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper
+    namespace="com.quince.lawyeraiassistant.security.identity.persistence.mybatis.ApplicationUserMapper">
+
+    <resultMap
+        id="applicationUserRowResultMap"
+        type="com.quince.lawyeraiassistant.security.identity.persistence.mybatis.ApplicationUserRow">
+
+        <constructor>
+            <arg column="id"
+                javaType="java.lang.String" />
+
+            <arg column="tenant_id"
+                javaType="java.lang.String" />
+
+            <arg column="username"
+                javaType="java.lang.String" />
+
+            <arg column="password_hash"
+                javaType="java.lang.String" />
+
+            <arg column="enabled"
+                javaType="_boolean" />
+
+            <arg column="role"
+                javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
+
+    <select
+        id="findRowsByUsername"
+        resultMap="applicationUserRowResultMap"> SELECT application_user.id,
+        application_user.tenant_id, application_user.username, application_user.password_hash,
+        application_user.enabled, application_user_role.role FROM application_user LEFT JOIN
+        application_user_role ON application_user_role.user_id = application_user.id WHERE
+        application_user.username = #{username} ORDER BY application_user_role.role </select>
+
+</mapper>

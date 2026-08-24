@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.quince.lawyeraiassistant.rag.config.RetrievalProperties;
+import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
 
 @Configuration
 @EnableConfigurationProperties({

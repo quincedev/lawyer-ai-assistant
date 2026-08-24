@@ -12,10 +12,14 @@ import com.quince.lawyeraiassistant.agent.skill.scope.SkillToolScope;
 import com.quince.lawyeraiassistant.agent.tool.AgentToolRegistry;
 import com.quince.lawyeraiassistant.agent.tool.DefaultToolActionExecutor;
 import com.quince.lawyeraiassistant.agent.tool.ToolExecutionContext;
+import com.quince.lawyeraiassistant.agent.tool.legal.cache.DefaultLegalToolCache;
+import com.quince.lawyeraiassistant.agent.tool.legal.mcp.SpringAiLegalKnowledgeMcpClient;
+import com.quince.lawyeraiassistant.agent.tool.legal.mcp.result.DefaultMcpLegalResultProcessor;
 import com.quince.lawyeraiassistant.cache.CacheKeyFactory;
 import com.quince.lawyeraiassistant.cache.config.AiCacheProperties;
 import com.quince.lawyeraiassistant.cache.tool.CaffeineToolResultCache;
 import com.quince.lawyeraiassistant.cache.tool.ToolCachePolicy;
+import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
 import com.quince.lawyeraiassistant.security.audit.SecurityAuditLogger;
 import com.quince.lawyeraiassistant.security.legal.LegalSecurityContext;
 import com.quince.lawyeraiassistant.security.legal.SecuritySource;
@@ -126,19 +130,25 @@ class AgentMcpBehaviorIntegrationTest {
                 AiCacheProperties cacheProperties = new AiCacheProperties();
 
                 McpLegalKnowledgeTool mcpTool = new McpLegalKnowledgeTool(
-                                provider,
-                                objectMapper,
-                                resultSecurityService,
-                                securityAuditLogger,
-                                tenantExecutionTokenService,
-                                new CaffeineToolResultCache(
-                                                100,
-                                                Duration.ofMinutes(10)),
-                                new ToolCachePolicy(),
-                                new CacheKeyFactory(objectMapper),
-                                cacheProperties,
-                                content -> content,
-                                performanceContext);
+                                new SpringAiLegalKnowledgeMcpClient(
+                                                provider,
+                                                objectMapper,
+                                                tenantExecutionTokenService,
+                                                performanceContext),
+                                new DefaultMcpLegalResultProcessor(
+                                                objectMapper,
+                                                resultSecurityService,
+                                                securityAuditLogger,
+                                                content -> content,
+                                                performanceContext),
+                                new DefaultLegalToolCache(
+                                                new CaffeineToolResultCache(
+                                                                100,
+                                                                Duration.ofMinutes(10)),
+                                                new ToolCachePolicy(),
+                                                new CacheKeyFactory(objectMapper),
+                                                cacheProperties,
+                                                performanceContext));
 
                 toolRegistry = new AgentToolRegistry(
                                 List.of(

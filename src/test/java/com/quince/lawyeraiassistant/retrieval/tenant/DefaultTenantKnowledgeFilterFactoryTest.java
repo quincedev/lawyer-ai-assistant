@@ -1,4 +1,4 @@
-package com.quince.lawyeraiassistant.rag.vector.tenant;
+package com.quince.lawyeraiassistant.retrieval.tenant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

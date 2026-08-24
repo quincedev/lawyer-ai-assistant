@@ -1,8 +1,8 @@
 package com.quince.lawyeraiassistant.rag.vector.service;
 
 import com.quince.lawyeraiassistant.rag.splitter.LegalTextSplitter;
-import com.quince.lawyeraiassistant.rag.vector.tenant.KnowledgeMetadata;
-import com.quince.lawyeraiassistant.rag.vector.tenant.KnowledgeScope;
+import com.quince.lawyeraiassistant.retrieval.tenant.KnowledgeMetadata;
+import com.quince.lawyeraiassistant.retrieval.tenant.KnowledgeScope;
 import com.quince.lawyeraiassistant.retrieval.parent.provider.ParentDocumentStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

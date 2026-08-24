@@ -2,24 +2,60 @@ services:
   mcp-agent:
     ports:
       - "8080:8080"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: mcp-agent,prod
+
+      MYSQL_URL: ${MYSQL_URL}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-lawyer-ai-assistant}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-1h}
+
+      # Agent 是唯一 Migration Owner。
+      SPRING_FLYWAY_ENABLED: "true"
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+      mcp-server:
+        condition: service_healthy
+
     mem_limit: 2g
     cpus: 2.0
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "5"
 
   mcp-server:
+    environment:
+      SPRING_PROFILES_ACTIVE: mcp-server,prod
+
+      MYSQL_URL: ${MYSQL_URL}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-lawyer-ai-assistant}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-1h}
+
+      # Server 不执行 Migration。
+      SPRING_FLYWAY_ENABLED: "false"
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+      ollama-init:
+        condition: service_completed_successfully
+
     mem_limit: 2g
     cpus: 2.0
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "5"
 
   mysql:
+    volumes:
+      - mysql-prod-data:/var/lib/mysql
+
     mem_limit: 1g
     cpus: 1.0
     logging:
@@ -63,3 +99,7 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+volumes:
+  mysql-prod-data:
+    name: lawyer-ai-mysql-prod-data

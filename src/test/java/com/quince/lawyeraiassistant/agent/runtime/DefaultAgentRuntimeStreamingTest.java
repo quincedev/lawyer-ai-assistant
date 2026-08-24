@@ -31,9 +31,14 @@ import com.quince.lawyeraiassistant.agent.model.ToolAction;
 import com.quince.lawyeraiassistant.agent.model.ToolObservation;
 import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
+import com.quince.lawyeraiassistant.agent.runtime.action.DefaultAgentActionCoordinator;
+import com.quince.lawyeraiassistant.agent.runtime.evidence.DefaultAgentEvidencePolicy;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
+import com.quince.lawyeraiassistant.agent.runtime.observability.DefaultAgentExecutionObserver;
+import com.quince.lawyeraiassistant.agent.runtime.policy.DefaultAgentExecutionPolicyFacade;
+import com.quince.lawyeraiassistant.agent.runtime.resource.DefaultAgentContextSizeEstimator;
 import com.quince.lawyeraiassistant.agent.service.AgentFinalAnswerService;
 import com.quince.lawyeraiassistant.agent.service.AgentReflectionService;
 import com.quince.lawyeraiassistant.agent.service.AgentReplanningService;
@@ -112,26 +117,34 @@ class DefaultAgentRuntimeStreamingTest {
                                                 new ContextLengthRuntimeResourcePolicy()),
                                 limits);
 
-                runtime = new DefaultAgentRuntime(
-                                agentPipeline,
-                                skillSelector,
-                                actionSelector,
-                                actionExecutionOperator,
-                                reflectionService,
-                                replanningService,
-                                finalAnswerService,
+                DefaultAgentExecutionPolicyFacade executionPolicy = new DefaultAgentExecutionPolicyFacade(
                                 limits,
                                 runtimeGuardrailService,
                                 resourceGuardrailService,
-                                new LegalEvidenceTrustPolicy(),
-                                securityAuditLogger,
-                                new DuplicateToolCallPolicy(),
-                                deterministicActionRouter,
+                                securityAuditLogger);
+
+                runtime = new DefaultAgentRuntime(
+                                agentPipeline,
+                                skillSelector,
+                                reflectionService,
+                                replanningService,
+                                finalAnswerService,
+                                executionPolicy,
+                                new DefaultAgentEvidencePolicy(
+                                                new LegalEvidenceTrustPolicy(),
+                                                securityAuditLogger),
+                                new DefaultAgentContextSizeEstimator(),
                                 new NoProgressRetryPolicy(),
-                                new AgentPerformanceContext(),
-                                ignored -> List.of(),
-                                micrometerMetrics,
-                                performanceSnapshotRecorder);
+                                new DefaultAgentActionCoordinator(
+                                                actionSelector,
+                                                actionExecutionOperator,
+                                                deterministicActionRouter,
+                                                new DuplicateToolCallPolicy()),
+                                new DefaultAgentExecutionObserver(
+                                                new AgentPerformanceContext(),
+                                                ignored -> List.of(),
+                                                micrometerMetrics,
+                                                performanceSnapshotRecorder));
 
                 when(skillSelector.select(any()))
                                 .thenReturn(Optional.empty());
