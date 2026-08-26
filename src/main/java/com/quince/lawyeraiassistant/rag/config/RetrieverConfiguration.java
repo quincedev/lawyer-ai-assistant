@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import com.quince.lawyeraiassistant.retrieval.config.RetrievalProperties;
 
 @Configuration
+@ConditionalOnRagEnabled
 public class RetrieverConfiguration {
 
     @Bean

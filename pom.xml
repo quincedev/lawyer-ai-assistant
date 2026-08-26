@@ -71,6 +71,7 @@
 			只运行 @Tag("security") / @SecurityTest。
 		-->
 		<test.groups></test.groups>
+		<archunit.version>1.5.0</archunit.version>
 
 	</properties>
 
@@ -176,6 +177,12 @@
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
 			<optional>true</optional>
 		</dependency>
 
@@ -304,6 +311,26 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- ========================================================= -->
+		<!-- Redis Cache                                               -->
+		<!-- ========================================================= -->
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!-- ========================================================= -->
+		<!-- Architecture Regression                                   -->
+		<!-- ========================================================= -->
+
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit</artifactId>
+			<version>${archunit.version}</version>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 
 	<!-- ===================================================== -->
@@ -389,6 +416,11 @@
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+								</path>
+
+								<path>
+									<groupId>org.springframework.boot</groupId>
+									<artifactId>spring-boot-configuration-processor</artifactId>
 								</path>
 
 							</annotationProcessorPaths>

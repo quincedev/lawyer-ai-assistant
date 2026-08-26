@@ -6,10 +6,10 @@ spring:
         name: lawyer-ai-assistant-mcp-server
 
     ai:
+        model:
+            embedding: ollama
+
         mcp:
-            # =======================================================
-            # MCP Server Role
-            # =======================================================
             server:
                 enabled: true
                 name: legal-mcp-server
@@ -26,35 +26,17 @@ spring:
                 annotation-scanner:
                     enabled: true
 
-            # =======================================================
-            # MCP Server 不再充当 MCP Client。
-            #
-            # 避免形成：
-            #
-            # Server
-            # → MCP Client
-            # → Server
-            # → ...
-            # =======================================================
+            # MCP Server 不同时作为 MCP Client。
             client:
                 enabled: false
 
 app:
-    # ===========================================================
-    # Legal Tool
-    # ===========================================================
     agent:
-        # MCP Server 内部真正执行 Local Legal Tool。
+        # Server 内部执行 Local Legal Tool。
         legal-tool-mode: local
 
-    # ===========================================================
-    # MCP Server Security
-    # ===========================================================
     mcp:
         security:
-            # Default DENY。
-            #
-            # 只有白名单中的 Tool 才允许从 MCP 暴露。
             allowed-tools:
                 - searchLegalKnowledge
 
@@ -62,17 +44,8 @@ app:
                 max-string-length: 10000
                 reject-unknown-fields: true
 
-    # ===========================================================
-    # RAG Knowledge Base
-    #
-    # 只有 MCP Server 负责：
-    #
-    # knowledge document
-    # → splitter
-    # → bge-m3
-    # → vector store
-    # ===========================================================
     rag:
+        # location/version 继承 application.yaml，
+        # 此处只声明 Server 的角色差异。
         knowledge-base:
             enabled: true
-            location: ${LEGAL_KNOWLEDGE_LOCATION:classpath:knowledge/}

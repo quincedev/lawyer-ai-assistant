@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.rag.controller;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.dto.ChunkPreviewResponse;
 import com.quince.lawyeraiassistant.rag.service.DocumentLoadService;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@ConditionalOnRagEnabled
 @RequestMapping("/rag")
 @RequiredArgsConstructor
 public class RagController {

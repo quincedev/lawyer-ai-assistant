@@ -4,7 +4,6 @@ import com.quince.lawyeraiassistant.agent.application.AgentApplicationService;
 import com.quince.lawyeraiassistant.agent.dto.AgentRequest;
 import com.quince.lawyeraiassistant.agent.dto.AgentResponse;
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
-import com.quince.lawyeraiassistant.agent.runtime.DefaultAgentRuntime;
 import com.quince.lawyeraiassistant.security.tenant.TenantContext;
 import com.quince.lawyeraiassistant.security.tenant.TenantContextProvider;
 import com.quince.lawyeraiassistant.web.stream.SseAgentStreamPublisher;
@@ -14,6 +13,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +40,7 @@ import java.util.concurrent.ExecutorService;
  * </p>
  */
 @RestController
+@Profile("!mcp-server")
 @RequestMapping("/api/playground")
 public class AgentPlaygroundController {
 
@@ -50,7 +51,7 @@ public class AgentPlaygroundController {
         private final TenantContextProvider tenantContextProvider;
 
         private static final Logger log = LoggerFactory.getLogger(
-                        DefaultAgentRuntime.class);
+                        AgentPlaygroundController.class);
 
         public AgentPlaygroundController(
                         AgentApplicationService agentApplicationService,

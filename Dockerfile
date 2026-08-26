@@ -17,6 +17,8 @@ WORKDIR /workspace
 # 不需要每次重新下载全部 Maven dependencies。
 # ------------------------------------------------------------
 
+COPY .mvn/settings-docker.xml /tmp/settings-docker.xml
+
 COPY pom.xml .
 
 RUN mvn \
@@ -64,14 +66,14 @@ LABEL org.opencontainers.image.description="Enterprise AI Agent and MCP legal kn
 LABEL org.opencontainers.image.version="0.0.1-SNAPSHOT"
 
 RUN groupadd \
-        --system \
-        appgroup \
+    --system \
+    appgroup \
     && useradd \
-        --system \
-        --gid appgroup \
-        --create-home \
-        --home-dir /app \
-        appuser
+    --system \
+    --gid appgroup \
+    --create-home \
+    --home-dir /app \
+    appuser
 
 WORKDIR /app
 

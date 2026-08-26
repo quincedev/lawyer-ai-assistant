@@ -1,6 +1,7 @@
 package com.quince.lawyeraiassistant.retrieval.operator;
 
 import com.quince.lawyeraiassistant.performance.PerformanceTimer;
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.tenant.TenantKnowledgeFilterFactory;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 
@@ -45,6 +46,7 @@ import java.util.Objects;
  * </p>
  */
 @Component
+@ConditionalOnRagEnabled
 @Order(100)
 public class VectorSearchOperator
                 implements RetrievalOperator {

@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.rag.embedding;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.embedding.dto.EmbeddingPreviewResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@ConditionalOnRagEnabled
 public class DocumentEmbeddingService {
 
     private static final int PREVIEW_SIZE = 8;

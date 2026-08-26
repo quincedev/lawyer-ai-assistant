@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.controller;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
 import org.springframework.ai.document.Document;
@@ -20,6 +21,7 @@ import java.util.Map;
  * </p>
  */
 @RestController
+@ConditionalOnRagEnabled
 @RequestMapping("/api/playground/retrieval")
 public class RetrievalPlaygroundController {
 

@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.rag.service;
 
 import com.quince.lawyeraiassistant.prompt.builder.PromptBuilder;
 import com.quince.lawyeraiassistant.prompt.model.PromptContext;
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
 import org.springframework.ai.chat.client.ChatClient;
@@ -39,6 +40,7 @@ import java.util.Objects;
  * </pre>
  */
 @Service
+@ConditionalOnRagEnabled
 public class RagChatService {
 
         private static final String DEFAULT_LEGAL_DOMAIN = "劳动法";

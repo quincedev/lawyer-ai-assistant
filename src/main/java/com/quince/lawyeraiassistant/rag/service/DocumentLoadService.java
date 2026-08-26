@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.rag.service;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.dto.ChunkPreviewResponse;
 import com.quince.lawyeraiassistant.rag.pipeline.LaborLawDocumentPipeline;
 import com.quince.lawyeraiassistant.rag.reader.LaborLawReader;
@@ -12,6 +13,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@ConditionalOnRagEnabled
 public class DocumentLoadService {
 
     private final LaborLawReader laborLawReader;

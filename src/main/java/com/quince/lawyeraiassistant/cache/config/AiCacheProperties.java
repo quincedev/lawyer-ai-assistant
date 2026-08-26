@@ -30,6 +30,12 @@ public class AiCacheProperties {
     @Valid
     private CacheSpec tool = new CacheSpec();
 
+    @NotNull
+    private CacheBackend backend = CacheBackend.CAFFEINE;
+
+    @Valid
+    private RedisSpec redis = new RedisSpec();
+
     public boolean isEnabled() {
 
         return enabled;
@@ -74,6 +80,28 @@ public class AiCacheProperties {
         this.tool = tool;
     }
 
+    public CacheBackend getBackend() {
+
+        return backend;
+    }
+
+    public void setBackend(
+            CacheBackend backend) {
+
+        this.backend = backend;
+    }
+
+    public RedisSpec getRedis() {
+
+        return redis;
+    }
+
+    public void setRedis(
+            RedisSpec redis) {
+
+        this.redis = redis;
+    }
+
     public static class CacheSpec {
 
         private boolean enabled = true;
@@ -115,6 +143,41 @@ public class AiCacheProperties {
                 Duration ttl) {
 
             this.ttl = ttl;
+        }
+    }
+
+    public static class RedisSpec {
+
+        @NotNull
+        private String keyPrefix = "lawyer-ai";
+
+        /**
+         * Redis 是性能优化组件。
+         * Redis 暂时不可用时，缓存读取按 MISS 处理，
+         * 写入和删除操作不阻断主业务链路。
+         */
+        private boolean failOpen = true;
+
+        public String getKeyPrefix() {
+
+            return keyPrefix;
+        }
+
+        public void setKeyPrefix(
+                String keyPrefix) {
+
+            this.keyPrefix = keyPrefix;
+        }
+
+        public boolean isFailOpen() {
+
+            return failOpen;
+        }
+
+        public void setFailOpen(
+                boolean failOpen) {
+
+            this.failOpen = failOpen;
         }
     }
 }

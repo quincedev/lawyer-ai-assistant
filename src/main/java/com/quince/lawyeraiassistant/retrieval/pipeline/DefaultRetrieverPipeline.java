@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.retrieval.pipeline;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.operator.RetrievalOperator;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
@@ -33,6 +34,7 @@ import java.util.Objects;
  * </pre>
  */
 @Component
+@ConditionalOnRagEnabled
 public class DefaultRetrieverPipeline
         implements RetrieverPipeline {
 

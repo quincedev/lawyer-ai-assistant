@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.quince.lawyeraiassistant.exception.SensitiveWordException;
 
@@ -23,206 +24,231 @@ import java.util.Objects;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ErrorResponse> handleAuthenticationException(
-            AuthenticationException exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(AuthenticationException.class)
+        public ResponseEntity<ErrorResponse> handleAuthenticationException(
+                        AuthenticationException exception,
+                        HttpServletRequest request) {
 
-        log.warn(
-                "Authentication failed. path={}",
-                request.getRequestURI());
+                log.warn(
+                                "Authentication failed. path={}",
+                                request.getRequestURI());
 
-        ErrorResponse response = createResponse(
-                ErrorCode.AUTHENTICATION_FAILED,
-                "Invalid username or password",
-                HttpStatus.UNAUTHORIZED,
-                request);
+                ErrorResponse response = createResponse(
+                                ErrorCode.AUTHENTICATION_FAILED,
+                                "Invalid username or password",
+                                HttpStatus.UNAUTHORIZED,
+                                request);
 
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.UNAUTHORIZED)
+                                .body(response);
+        }
 
-    @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ErrorResponse> handleBusinessException(
-            BusinessException exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(BusinessException.class)
+        public ResponseEntity<ErrorResponse> handleBusinessException(
+                        BusinessException exception,
+                        HttpServletRequest request) {
 
-        log.warn(
-                "Business exception. code={}, path={}, message={}",
-                exception.getCode(),
-                request.getRequestURI(),
-                exception.getMessage());
+                log.warn(
+                                "Business exception. code={}, path={}, message={}",
+                                exception.getCode(),
+                                request.getRequestURI(),
+                                exception.getMessage());
 
-        ErrorResponse response = createResponse(
-                exception.getErrorCode(),
-                exception.getMessage(),
-                exception.getStatus(),
-                request);
+                ErrorResponse response = createResponse(
+                                exception.getErrorCode(),
+                                exception.getMessage(),
+                                exception.getStatus(),
+                                request);
 
-        return ResponseEntity
-                .status(exception.getStatus())
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(exception.getStatus())
+                                .body(response);
+        }
 
-    @ExceptionHandler(SensitiveWordException.class)
-    public ResponseEntity<ErrorResponse> handleSensitiveWordException(
-            SensitiveWordException exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(SensitiveWordException.class)
+        public ResponseEntity<ErrorResponse> handleSensitiveWordException(
+                        SensitiveWordException exception,
+                        HttpServletRequest request) {
 
-        log.warn(
-                "AI request rejected by content guardrail. path={}, matchedWord={}",
-                request.getRequestURI(),
-                exception.getMatchedWord());
+                log.warn(
+                                "AI request rejected by content guardrail. path={}, matchedWord={}",
+                                request.getRequestURI(),
+                                exception.getMatchedWord());
 
-        ErrorResponse response = createResponse(
-                ErrorCode.AI_CONTENT_REJECTED,
-                exception.getMessage(),
-                HttpStatus.BAD_REQUEST,
-                request);
+                ErrorResponse response = createResponse(
+                                ErrorCode.AI_CONTENT_REJECTED,
+                                exception.getMessage(),
+                                HttpStatus.BAD_REQUEST,
+                                request);
 
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(response);
+        }
 
-    /**
-     * 处理直接标注在 Controller 方法参数上的约束，
-     * 例如 @RequestParam @NotBlank String question。
-     */
-    @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<ErrorResponse> handleMethodValidation(
-            HandlerMethodValidationException exception,
-            HttpServletRequest request) {
+        /**
+         * 处理直接标注在 Controller 方法参数上的约束，
+         * 例如 @RequestParam @NotBlank String question。
+         */
+        @ExceptionHandler(HandlerMethodValidationException.class)
+        public ResponseEntity<ErrorResponse> handleMethodValidation(
+                        HandlerMethodValidationException exception,
+                        HttpServletRequest request) {
 
-        String message = exception.getAllErrors()
-                .stream()
-                .map(MessageSourceResolvable::getDefaultMessage)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse("请求参数校验失败");
+                String message = exception.getAllErrors()
+                                .stream()
+                                .map(MessageSourceResolvable::getDefaultMessage)
+                                .filter(Objects::nonNull)
+                                .findFirst()
+                                .orElse("请求参数校验失败");
 
-        return buildBadRequest(
-                ErrorCode.VALIDATION_ERROR,
-                message,
-                request);
-    }
+                return buildBadRequest(
+                                ErrorCode.VALIDATION_ERROR,
+                                message,
+                                request);
+        }
 
-    /**
-     * 处理 @RequestBody + @Valid 等对象参数校验。
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException exception,
-            HttpServletRequest request) {
+        /**
+         * 处理 @RequestBody + @Valid 等对象参数校验。
+         */
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+                        MethodArgumentNotValidException exception,
+                        HttpServletRequest request) {
 
-        String message = exception.getBindingResult()
-                .getAllErrors()
-                .stream()
-                .map(MessageSourceResolvable::getDefaultMessage)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse("请求参数校验失败");
+                String message = exception.getBindingResult()
+                                .getAllErrors()
+                                .stream()
+                                .map(MessageSourceResolvable::getDefaultMessage)
+                                .filter(Objects::nonNull)
+                                .findFirst()
+                                .orElse("请求参数校验失败");
 
-        return buildBadRequest(
-                ErrorCode.VALIDATION_ERROR,
-                message,
-                request);
-    }
+                return buildBadRequest(
+                                ErrorCode.VALIDATION_ERROR,
+                                message,
+                                request);
+        }
 
-    /**
-     * 兼容使用类级别 @Validated 时可能产生的异常。
-     */
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolation(
-            ConstraintViolationException exception,
-            HttpServletRequest request) {
+        /**
+         * 兼容使用类级别 @Validated 时可能产生的异常。
+         */
+        @ExceptionHandler(ConstraintViolationException.class)
+        public ResponseEntity<ErrorResponse> handleConstraintViolation(
+                        ConstraintViolationException exception,
+                        HttpServletRequest request) {
 
-        String message = exception.getConstraintViolations()
-                .stream()
-                .map(ConstraintViolation::getMessage)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse("请求参数校验失败");
+                String message = exception.getConstraintViolations()
+                                .stream()
+                                .map(ConstraintViolation::getMessage)
+                                .filter(Objects::nonNull)
+                                .findFirst()
+                                .orElse("请求参数校验失败");
 
-        return buildBadRequest(
-                ErrorCode.VALIDATION_ERROR,
-                message,
-                request);
-    }
+                return buildBadRequest(
+                                ErrorCode.VALIDATION_ERROR,
+                                message,
+                                request);
+        }
 
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ErrorResponse> handleMissingParameter(
-            MissingServletRequestParameterException exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(MissingServletRequestParameterException.class)
+        public ResponseEntity<ErrorResponse> handleMissingParameter(
+                        MissingServletRequestParameterException exception,
+                        HttpServletRequest request) {
 
-        String message = "缺少必填参数：" + exception.getParameterName();
+                String message = "缺少必填参数：" + exception.getParameterName();
 
-        return buildBadRequest(
-                ErrorCode.MISSING_REQUEST_PARAMETER,
-                message,
-                request);
-    }
+                return buildBadRequest(
+                                ErrorCode.MISSING_REQUEST_PARAMETER,
+                                message,
+                                request);
+        }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(
-            IllegalArgumentException exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ErrorResponse> handleIllegalArgument(
+                        IllegalArgumentException exception,
+                        HttpServletRequest request) {
 
-        return buildBadRequest(
-                ErrorCode.INVALID_ARGUMENT,
-                exception.getMessage(),
-                request);
-    }
+                return buildBadRequest(
+                                ErrorCode.INVALID_ARGUMENT,
+                                exception.getMessage(),
+                                request);
+        }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpectedException(
-            Exception exception,
-            HttpServletRequest request) {
+        @ExceptionHandler(NoResourceFoundException.class)
+        public ResponseEntity<ErrorResponse> handleNoResourceFound(
+                        NoResourceFoundException exception,
+                        HttpServletRequest request) {
 
-        log.error(
-                "Unexpected exception. path={}",
-                request.getRequestURI(),
-                exception);
+                /*
+                 * 路由不存在属于客户端请求错误，不记录完整异常堆栈。
+                 * 避免健康探测、扫描器或错误 URL 污染 ERROR 日志。
+                 */
+                log.debug(
+                                "Requested resource was not found. method={}, path={}",
+                                request.getMethod(),
+                                request.getRequestURI());
 
-        ErrorResponse response = createResponse(
-                ErrorCode.INTERNAL_SERVER_ERROR,
-                "系统内部错误，请稍后重试",
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                request);
+                ErrorResponse response = createResponse(
+                                ErrorCode.RESOURCE_NOT_FOUND,
+                                "请求资源不存在",
+                                HttpStatus.NOT_FOUND,
+                                request);
 
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.NOT_FOUND)
+                                .body(response);
+        }
 
-    private ResponseEntity<ErrorResponse> buildBadRequest(
-            ErrorCode errorCode,
-            String message,
-            HttpServletRequest request) {
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ErrorResponse> handleUnexpectedException(
+                        Exception exception,
+                        HttpServletRequest request) {
 
-        ErrorResponse response = createResponse(
-                errorCode,
-                message,
-                HttpStatus.BAD_REQUEST,
-                request);
+                log.error(
+                                "Unexpected exception. path={}",
+                                request.getRequestURI(),
+                                exception);
 
-        return ResponseEntity
-                .badRequest()
-                .body(response);
-    }
+                ErrorResponse response = createResponse(
+                                ErrorCode.INTERNAL_SERVER_ERROR,
+                                "系统内部错误，请稍后重试",
+                                HttpStatus.INTERNAL_SERVER_ERROR,
+                                request);
 
-    private ErrorResponse createResponse(
-            ErrorCode errorCode,
-            String message,
-            HttpStatus status,
-            HttpServletRequest request) {
+                return ResponseEntity
+                                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .body(response);
+        }
 
-        return new ErrorResponse(
-                errorCode.name(),
-                message,
-                status.value(),
-                request.getRequestURI(),
-                Instant.now());
-    }
+        private ResponseEntity<ErrorResponse> buildBadRequest(
+                        ErrorCode errorCode,
+                        String message,
+                        HttpServletRequest request) {
+
+                ErrorResponse response = createResponse(
+                                errorCode,
+                                message,
+                                HttpStatus.BAD_REQUEST,
+                                request);
+
+                return ResponseEntity
+                                .badRequest()
+                                .body(response);
+        }
+
+        private ErrorResponse createResponse(
+                        ErrorCode errorCode,
+                        String message,
+                        HttpStatus status,
+                        HttpServletRequest request) {
+
+                return new ErrorResponse(
+                                errorCode.name(),
+                                message,
+                                status.value(),
+                                request.getRequestURI(),
+                                Instant.now());
+        }
 }

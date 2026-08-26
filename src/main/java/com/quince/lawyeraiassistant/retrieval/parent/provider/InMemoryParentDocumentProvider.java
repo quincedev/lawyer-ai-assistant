@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
+
 /**
  * 基于内存的 Parent Document 存储与读取实现。
  *
@@ -20,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </p>
  */
 @Component
+@ConditionalOnRagEnabled
 public class InMemoryParentDocumentProvider
         implements ParentDocumentProvider,
         ParentDocumentStore {
@@ -128,5 +131,28 @@ public class InMemoryParentDocumentProvider
         }
 
         return normalizedId;
+    }
+
+    @Override
+    public void deleteByIds(
+            Collection<String> parentDocumentIds) {
+
+        if (parentDocumentIds == null
+                || parentDocumentIds.isEmpty()) {
+
+            return;
+        }
+
+        for (String parentDocumentId : parentDocumentIds) {
+
+            if (parentDocumentId == null
+                    || parentDocumentId.isBlank()) {
+
+                continue;
+            }
+
+            parentDocuments.remove(
+                    parentDocumentId.trim());
+        }
     }
 }

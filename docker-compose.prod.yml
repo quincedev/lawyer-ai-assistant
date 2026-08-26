@@ -6,20 +6,34 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: mcp-agent,prod
 
-      MYSQL_URL: ${MYSQL_URL}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_URL: ${MYSQL_URL:?MYSQL_URL is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
 
-      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:?SECURITY_JWT_SECRET is required}
       JWT_ISSUER: ${JWT_ISSUER:-lawyer-ai-assistant}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-1h}
 
-      # Agent 是唯一 Migration Owner。
       SPRING_FLYWAY_ENABLED: "true"
+
+      AI_CACHE_BACKEND: ${AI_CACHE_BACKEND:-REDIS}
+      AI_CACHE_REDIS_KEY_PREFIX: ${AI_CACHE_REDIS_KEY_PREFIX:-lawyer-ai}
+      AI_CACHE_REDIS_FAIL_OPEN: ${AI_CACHE_REDIS_FAIL_OPEN:-true}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
 
     depends_on:
       mysql:
         condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+      ollama-init:
+        condition: service_completed_successfully
 
       mcp-server:
         condition: service_healthy
@@ -31,19 +45,30 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: mcp-server,prod
 
-      MYSQL_URL: ${MYSQL_URL}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_URL: ${MYSQL_URL:?MYSQL_URL is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
 
-      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:?SECURITY_JWT_SECRET is required}
       JWT_ISSUER: ${JWT_ISSUER:-lawyer-ai-assistant}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-1h}
 
-      # Server 不执行 Migration。
       SPRING_FLYWAY_ENABLED: "false"
+
+      AI_CACHE_BACKEND: ${AI_CACHE_BACKEND:-REDIS}
+      AI_CACHE_REDIS_KEY_PREFIX: ${AI_CACHE_REDIS_KEY_PREFIX:-lawyer-ai}
+      AI_CACHE_REDIS_FAIL_OPEN: ${AI_CACHE_REDIS_FAIL_OPEN:-true}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
 
     depends_on:
       mysql:
+        condition: service_healthy
+
+      redis:
         condition: service_healthy
 
       ollama-init:

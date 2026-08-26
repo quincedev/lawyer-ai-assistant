@@ -1,21 +1,3 @@
-# =============================================================
-# Production Runtime Configuration
-#
-# 此 Profile 不决定：
-#
-# MCP Agent / MCP Server Role
-#
-# Role 必须分别由：
-#
-# mcp-agent
-# mcp-server
-#
-# 决定。
-# =============================================================
-
-# =============================================================
-# Graceful Shutdown
-# =============================================================
 server:
     shutdown: graceful
 
@@ -24,60 +6,45 @@ spring:
         timeout-per-shutdown-phase: 30s
 
     datasource:
-        # Production 不提供 localhost fallback。
-        # 缺少环境变量时应当直接启动失败。
         url: ${MYSQL_URL}
         username: ${MYSQL_USER}
         password: ${MYSQL_PASSWORD}
         driver-class-name: com.mysql.cj.jdbc.Driver
 
-    hikari:
-        pool-name: ${HIKARI_POOL_NAME:lawyer-ai-mysql-pool}
-
-        minimum-idle: ${HIKARI_MINIMUM_IDLE:1}
-        maximum-pool-size: ${HIKARI_MAXIMUM_POOL_SIZE:5}
-
-        connection-timeout: ${HIKARI_CONNECTION_TIMEOUT_MS:10000}
-        validation-timeout: ${HIKARI_VALIDATION_TIMEOUT_MS:5000}
-        idle-timeout: ${HIKARI_IDLE_TIMEOUT_MS:600000}
-        max-lifetime: ${HIKARI_MAX_LIFETIME_MS:1800000}
-
-        # 数据库不可达时，生产启动应 fail-fast。
-        initialization-fail-timeout: ${HIKARI_INITIALIZATION_FAIL_TIMEOUT_MS:1}
+        hikari:
+            pool-name: ${HIKARI_POOL_NAME:lawyer-ai-mysql-pool}
+            minimum-idle: ${HIKARI_MINIMUM_IDLE:1}
+            maximum-pool-size: ${HIKARI_MAXIMUM_POOL_SIZE:5}
+            connection-timeout: ${HIKARI_CONNECTION_TIMEOUT_MS:10000}
+            validation-timeout: ${HIKARI_VALIDATION_TIMEOUT_MS:5000}
+            idle-timeout: ${HIKARI_IDLE_TIMEOUT_MS:600000}
+            max-lifetime: ${HIKARI_MAX_LIFETIME_MS:1800000}
+            initialization-fail-timeout: ${HIKARI_INITIALIZATION_FAIL_TIMEOUT_MS:1}
 
     flyway:
-        # 默认关闭。
-        # 由指定的迁移容器显式设置 SPRING_FLYWAY_ENABLED=true。
+        # Migration Owner 由 Compose 针对角色覆盖。
         enabled: false
 
-        # 生产环境绝不加载 db/dev-seed。
         locations:
             - classpath:db/migration
 
         validate-on-migrate: true
         clean-disabled: true
 
-        # 可选的独立迁移账号。
-        # 未配置时回退到应用数据库账号。
         url: ${FLYWAY_URL:${MYSQL_URL}}
         user: ${FLYWAY_USER:${MYSQL_USER}}
         password: ${FLYWAY_PASSWORD:${MYSQL_PASSWORD}}
 
-# =============================================================
-# Production Logging
-# =============================================================
 logging:
     level:
-        # 生产环境禁止打印完整 Prompt / Response DEBUG 内容。
         com.quince.lawyeraiassistant.advisor.LoggingAdvisorV2: INFO
-
-        # 安全审计继续保留。
         SECURITY_AUDIT: INFO
 
-# =============================================================
-# Production Actuator
-# =============================================================
 management:
+    health:
+        redis:
+            enabled: true
+
     endpoints:
         web:
             exposure:
@@ -92,25 +59,20 @@ management:
             probes:
                 enabled: true
 
-# =============================================================
-# Production JWT
-#
-# Production 不允许使用 application.yaml
-# 中的开发 fallback secret。
-#
-# 容器必须显式提供：
-#
-# SECURITY_JWT_SECRET
-# =============================================================
 security:
     jwt:
         issuer: ${JWT_ISSUER:lawyer-ai-assistant}
-
         secret: ${SECURITY_JWT_SECRET}
-
         access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:1h}
 
 app:
+    cache:
+        backend: ${AI_CACHE_BACKEND:REDIS}
+
+        redis:
+            key-prefix: ${AI_CACHE_REDIS_KEY_PREFIX:lawyer-ai}
+            fail-open: ${AI_CACHE_REDIS_FAIL_OPEN:true}
+
     security:
         identity:
             store: mybatis

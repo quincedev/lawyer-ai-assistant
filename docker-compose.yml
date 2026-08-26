@@ -6,10 +6,10 @@ services:
     restart: unless-stopped
 
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
 
     expose:
       - "3306"
@@ -118,7 +118,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: mcp-server
 
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+
+      DEEPSEEK_CHAT_MODEL: ${DEEPSEEK_CHAT_MODEL:-deepseek-v4-flash}
 
       OLLAMA_BASE_URL: http://ollama:11434
 
@@ -126,7 +128,7 @@ services:
 
       LEGAL_KNOWLEDGE_LOCATION: ${LEGAL_KNOWLEDGE_LOCATION:-classpath:knowledge/}
 
-      AI_CACHE_KNOWLEDGE_VERSION: ${AI_CACHE_KNOWLEDGE_VERSION:-v1}
+      LEGAL_KNOWLEDGE_VERSION: ${LEGAL_KNOWLEDGE_VERSION:-v1}
 
       JAVA_OPTS: >-
         -XX:MaxRAMPercentage=75.0
@@ -159,11 +161,15 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: mcp-agent
 
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+
+      DEEPSEEK_CHAT_MODEL: ${DEEPSEEK_CHAT_MODEL:-deepseek-v4-flash}
 
       LEGAL_MCP_SERVER_URL: http://mcp-server:8081
 
       MCP_REQUEST_TIMEOUT: ${MCP_REQUEST_TIMEOUT:-30s}
+
+      LEGAL_KNOWLEDGE_VERSION: ${LEGAL_KNOWLEDGE_VERSION:-v1}
 
       JAVA_OPTS: >-
         -XX:MaxRAMPercentage=75.0
@@ -215,7 +221,7 @@ services:
 
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
 
     expose:
       - "3000"

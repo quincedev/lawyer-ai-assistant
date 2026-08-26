@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.rag.pipeline;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.reader.LaborLawReader;
 import com.quince.lawyeraiassistant.rag.splitter.LaborLawSplitter;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnRagEnabled
 public class LaborLawDocumentPipeline implements DocumentPipeline {
 
     private final LaborLawReader laborLawReader;

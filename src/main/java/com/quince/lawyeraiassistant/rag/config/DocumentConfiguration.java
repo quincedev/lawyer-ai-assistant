@@ -6,7 +6,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 @Configuration
-public class DocumentConfig {
+@ConditionalOnRagEnabled
+public class DocumentConfiguration {
 
     @Bean
     public Resource laborLawPdf() {

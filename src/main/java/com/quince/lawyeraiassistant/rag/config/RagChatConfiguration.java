@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
  * </p>
  */
 @Configuration
+@ConditionalOnRagEnabled
 public class RagChatConfiguration {
 
     @Bean("ragChatClient")

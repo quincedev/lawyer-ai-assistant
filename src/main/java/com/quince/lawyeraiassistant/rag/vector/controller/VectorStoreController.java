@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.rag.vector.controller;
 
 import com.quince.lawyeraiassistant.common.response.ApiResponse;
 import com.quince.lawyeraiassistant.dto.response.SearchResponse;
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.vector.service.VectorSearchService;
 
 import jakarta.validation.constraints.NotBlank;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@ConditionalOnRagEnabled
 @RequiredArgsConstructor
 public class VectorStoreController {
 

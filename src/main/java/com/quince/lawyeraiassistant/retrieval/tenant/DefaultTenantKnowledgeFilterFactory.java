@@ -2,9 +2,12 @@ package com.quince.lawyeraiassistant.retrieval.tenant;
 
 import java.util.Objects;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
+
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnRagEnabled
 public final class DefaultTenantKnowledgeFilterFactory
         implements TenantKnowledgeFilterFactory {
 

@@ -1,0 +1,14 @@
+{
+  "properties": [
+    {
+      "name": "spring.ai.mcp.client.streamable-http.connections.*.url",
+      "type": "java.lang.String",
+      "description": "Base URL of a named Streamable HTTP MCP server connection."
+    },
+    {
+      "name": "spring.ai.mcp.client.streamable-http.connections.*.endpoint",
+      "type": "java.lang.String",
+      "description": "Streamable HTTP endpoint path of a named MCP server connection."
+    }
+  ]
+}

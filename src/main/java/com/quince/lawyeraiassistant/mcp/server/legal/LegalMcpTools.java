@@ -1,6 +1,7 @@
 package com.quince.lawyeraiassistant.mcp.server.legal;
 
 import com.quince.lawyeraiassistant.knowledge.contract.LegalToolContract;
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.formatter.LegalRetrievalResultFormatter;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 import com.quince.lawyeraiassistant.retrieval.orchestration.RetrievalOrchestrator;
@@ -60,6 +61,7 @@ import java.util.Objects;
 @Slf4j
 @Component
 @Profile("mcp-server")
+@ConditionalOnRagEnabled
 public class LegalMcpTools {
 
         private final RetrievalOrchestrator retrievalOrchestrator;

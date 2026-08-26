@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.retrieval.formatter;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.retrieval.model.RetrieverContext;
 
 import org.springframework.ai.document.Document;
@@ -24,6 +25,7 @@ import java.util.Objects;
  * </p>
  */
 @Component
+@ConditionalOnRagEnabled
 public class LegalRetrievalResultFormatter {
 
     private static final String NO_KNOWLEDGE_FOUND = "未检索到与当前法律问题相关的知识。";

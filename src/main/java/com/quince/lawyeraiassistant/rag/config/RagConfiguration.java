@@ -13,11 +13,12 @@ import com.quince.lawyeraiassistant.rag.splitter.LegalTextSplitter;
 
 @Slf4j
 @Configuration
+@ConditionalOnRagEnabled
 @EnableConfigurationProperties({
         RagSplitterProperties.class,
         LegalTextSplitterProperties.class
 })
-public class RagConfig {
+public class RagConfiguration {
 
     @Bean
     public TokenTextSplitter tokenTextSplitter(

@@ -1,5 +1,6 @@
 package com.quince.lawyeraiassistant.rag.embedding;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
 import com.quince.lawyeraiassistant.rag.embedding.dto.EmbeddingPreviewResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@ConditionalOnRagEnabled
 @RequestMapping("/rag/embeddings")
 @RequiredArgsConstructor
 public class EmbeddingController {

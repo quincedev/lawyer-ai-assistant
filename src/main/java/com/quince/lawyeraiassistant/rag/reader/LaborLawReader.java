@@ -6,10 +6,13 @@ import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
+
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@ConditionalOnRagEnabled
 public class LaborLawReader {
 
     private final Resource laborLawPdf;

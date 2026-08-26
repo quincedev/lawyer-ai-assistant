@@ -6,13 +6,11 @@ spring:
         name: lawyer-ai-assistant-mcp-agent
 
     ai:
+        # Agent 不创建任何 EmbeddingModel。
+        model:
+            embedding: none
+
         mcp:
-            # =======================================================
-            # Agent Role
-            #
-            # Agent 是 MCP Client。
-            # 绝对不同时启动 MCP Server。
-            # =======================================================
             server:
                 enabled: false
 
@@ -24,15 +22,6 @@ spring:
                 initialized: true
                 request-timeout: ${MCP_REQUEST_TIMEOUT:30s}
 
-                # =====================================================
-                # Spring AI 2.x Streamable HTTP
-                #
-                # Local:
-                #   http://localhost:8081/mcp
-                #
-                # Docker:
-                #   http://mcp-server:8081/mcp
-                # =====================================================
                 streamable-http:
                     connections:
                         legal-server:
@@ -41,20 +30,8 @@ spring:
 
 app:
     agent:
-        # =========================================================
-        # Agent 必须通过 MCP 调用法律知识 Tool。
-        #
-        # 如果缺少这一项，
-        # McpLegalKnowledgeTool 不会成为实际 Legal Tool。
-        # =========================================================
         legal-tool-mode: mcp
 
     rag:
-        # =========================================================
-        # Agent 不负责初始化本地法律 Knowledge Base。
-        #
-        # 避免：
-        # Agent + Server 两边重复 Embedding / Vector 初始化。
-        # =========================================================
         knowledge-base:
             enabled: false

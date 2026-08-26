@@ -1,9 +1,21 @@
 spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      password: ${REDIS_PASSWORD:}
+
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+
+      client-type: lettuce
+
   application:
     name: lawyer-ai-assistant
 
   datasource:
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3307/lawyer_ai_assistant?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3307/lawyer_ai?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -82,9 +94,16 @@ app:
   cache:
     enabled: true
 
-    # Knowledge Base 更新时修改版本，
-    # 通过 Cache Key 自然淘汰旧缓存。
-    knowledge-version: ${AI_CACHE_KNOWLEDGE_VERSION:v1}
+    # 默认模式保持原有行为。
+    backend: ${AI_CACHE_BACKEND:CAFFEINE}
+
+    # Cache Key 中使用当前 Knowledge Version，
+    # 知识版本升级后自然生成新 Key。
+    knowledge-version: ${LEGAL_KNOWLEDGE_VERSION:v1}
+
+    redis:
+      key-prefix: ${AI_CACHE_REDIS_KEY_PREFIX:lawyer-ai}
+      fail-open: ${AI_CACHE_REDIS_FAIL_OPEN:true}
 
     retrieval:
       enabled: true
@@ -185,6 +204,7 @@ app:
     knowledge-base:
       enabled: true
       location: ${LEGAL_KNOWLEDGE_LOCATION:classpath:knowledge/}
+      version: ${LEGAL_KNOWLEDGE_VERSION:v1}
 
     retrieval:
       top-k: 5
@@ -264,6 +284,10 @@ security:
 # Actuator / Micrometer
 # =============================================================
 management:
+  health:
+    redis:
+      enabled: false
+
   endpoints:
     web:
       exposure:

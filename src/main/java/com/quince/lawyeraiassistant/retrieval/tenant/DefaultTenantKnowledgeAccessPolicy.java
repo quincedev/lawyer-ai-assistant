@@ -3,10 +3,13 @@ package com.quince.lawyeraiassistant.retrieval.tenant;
 import java.util.Map;
 import java.util.Objects;
 
+import com.quince.lawyeraiassistant.rag.config.ConditionalOnRagEnabled;
+
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnRagEnabled
 public final class DefaultTenantKnowledgeAccessPolicy
         implements TenantKnowledgeAccessPolicy {
 

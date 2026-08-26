@@ -1,10 +1,8 @@
 package com.quince.lawyeraiassistant.rag.vector.service;
 
-import org.springframework.ai.document.Document;
-
-import java.util.List;
+import com.quince.lawyeraiassistant.rag.vector.sync.LoadedKnowledgeBatch;
 
 public interface DocumentLoadingService {
 
-    List<Document> loadAndSplit(String location);
+    LoadedKnowledgeBatch load(String location);
 }

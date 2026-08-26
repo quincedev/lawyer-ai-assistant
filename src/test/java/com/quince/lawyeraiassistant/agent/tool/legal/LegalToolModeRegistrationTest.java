@@ -54,6 +54,8 @@ class LegalToolModeRegistrationTest {
          * 所以这里直接注册一个 mock Bean。
          */
         private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+                        .withPropertyValues(
+                                        "app.rag.knowledge-base.enabled=true")
                         .withBean(
                                         AgentPerformanceContext.class,
                                         AgentPerformanceContext::new)
