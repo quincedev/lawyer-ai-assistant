@@ -1,7 +1,10 @@
 package com.quince.lawyeraiassistant.agent.runtime.observability;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentCostProperties;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentExecutionCostAttributionRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceMetrics;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshot;
@@ -33,6 +38,10 @@ class DefaultAgentExecutionObserverTest {
 
     private AgentPerformanceSnapshotRecorder performanceSnapshotRecorder;
 
+    private AgentExecutionCostAttributionRecorder costAttributionRecorder;
+
+    private AgentCostProperties costProperties;
+
     private DefaultAgentExecutionObserver observer;
 
     @BeforeEach
@@ -50,11 +59,21 @@ class DefaultAgentExecutionObserverTest {
         performanceSnapshotRecorder = mock(
                 AgentPerformanceSnapshotRecorder.class);
 
+        costAttributionRecorder = mock(
+                AgentExecutionCostAttributionRecorder.class);
+
+        costProperties = new AgentCostProperties();
+
+        when(performanceGuardrailService.evaluate(any()))
+                .thenReturn(List.of());
+
         observer = new DefaultAgentExecutionObserver(
                 performanceContext,
                 performanceGuardrailService,
                 micrometerMetrics,
-                performanceSnapshotRecorder);
+                performanceSnapshotRecorder,
+                costAttributionRecorder,
+                costProperties);
     }
 
     @Test
@@ -77,6 +96,18 @@ class DefaultAgentExecutionObserverTest {
         verify(
                 performanceContext)
                 .start();
+    }
+
+    @Test
+    void shouldCreateDifferentExecutionIdForEveryStart() {
+
+        when(performanceContext.start())
+                .thenReturn(mock(AgentPerformanceMetrics.class));
+
+        AgentExecutionObservation first = observer.start();
+        AgentExecutionObservation second = observer.start();
+
+        assertNotEquals(first.executionId(), second.executionId());
     }
 
     @Test
@@ -127,6 +158,7 @@ class DefaultAgentExecutionObserverTest {
                 AgentPerformanceSnapshot.class);
 
         AgentExecutionObservation observation = new AgentExecutionObservation(
+                "execution-test-001",
                 System.nanoTime(),
                 metrics);
 
@@ -198,6 +230,7 @@ class DefaultAgentExecutionObserverTest {
                 AgentPerformanceSnapshot.class);
 
         AgentExecutionObservation observation = new AgentExecutionObservation(
+                "execution-test-001",
                 System.nanoTime(),
                 metrics);
 
@@ -230,5 +263,87 @@ class DefaultAgentExecutionObserverTest {
         verify(
                 performanceContext)
                 .clear();
+    }
+
+    @Test
+    void shouldSaveAttributionOnComplete() {
+
+        AgentPerformanceSnapshot snapshot = complete(
+                AgentExecutionStatus.SUCCESS,
+                snapshot(2, 0, 2, 0, 750_000));
+
+        verify(costAttributionRecorder).record(argThat(attribution ->
+                attribution.executionId().equals("execution-test-001")
+                        && attribution.executionStatus() == AgentExecutionStatus.SUCCESS
+                        && attribution.llmCalls() == snapshot.llmCalls()));
+    }
+
+    @Test
+    void shouldRecordCostForSuccessfulExecution() {
+
+        complete(
+                AgentExecutionStatus.SUCCESS,
+                snapshot(2, 0, 2, 0, 750_000));
+
+        verify(costAttributionRecorder).record(argThat(attribution ->
+                attribution.costMicros() == 750_000
+                        && attribution.fullyAttributed()));
+    }
+
+    @Test
+    void shouldRecordAvailableCostForFailedExecution() {
+
+        complete(
+                AgentExecutionStatus.FAILED,
+                snapshot(2, 1, 1, 0, 250_000));
+
+        verify(costAttributionRecorder).record(argThat(attribution ->
+                attribution.executionStatus() == AgentExecutionStatus.FAILED
+                        && attribution.costMicros() == 250_000
+                        && !attribution.fullyAttributed()));
+    }
+
+    @Test
+    void shouldClearPerformanceContextAfterComplete() {
+
+        complete(
+                AgentExecutionStatus.SUCCESS,
+                snapshot(1, 0, 1, 0, 10));
+
+        verify(performanceContext).clear();
+    }
+
+    private AgentPerformanceSnapshot complete(
+            AgentExecutionStatus status,
+            AgentPerformanceSnapshot snapshot) {
+
+        AgentPerformanceMetrics metrics = mock(AgentPerformanceMetrics.class);
+        when(metrics.snapshot()).thenReturn(snapshot);
+
+        observer.complete(
+                new AgentExecutionObservation(
+                        "execution-test-001",
+                        System.nanoTime(),
+                        metrics),
+                AgentContext.from("test goal"),
+                AgentContext.from("test result"),
+                status);
+
+        return snapshot;
+    }
+
+    private AgentPerformanceSnapshot snapshot(
+            int llmCalls,
+            int usageMissingCalls,
+            long pricedLlmCalls,
+            long pricingMissingCalls,
+            long costMicros) {
+
+        return new AgentPerformanceSnapshot(
+                100, llmCalls, 80,
+                100, 20, 120, usageMissingCalls,
+                1, 10, 0, 0, 0, 0,
+                0, 0, 0, 0,
+                costMicros, pricedLlmCalls, pricingMissingCalls);
     }
 }

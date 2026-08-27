@@ -179,6 +179,15 @@ public class DefaultAgentRuntime
 
                 } catch (RuntimeException exception) {
 
+                        log.error(
+                                        "Agent runtime execution failed. "
+                                                        + "executionId={}, errorType={}, message={}",
+                                        observation.executionId(),
+                                        exception.getClass()
+                                                        .getSimpleName(),
+                                        exception.getMessage(),
+                                        exception);
+
                         publisher.publish(
                                         AgentStreamEvent.of(
                                                         AgentStreamEventType.AGENT_FAILED,

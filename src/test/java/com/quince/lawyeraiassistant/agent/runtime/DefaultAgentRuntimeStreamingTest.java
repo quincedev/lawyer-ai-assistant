@@ -33,6 +33,8 @@ import com.quince.lawyeraiassistant.agent.operator.AgentActionExecutionOperator;
 import com.quince.lawyeraiassistant.agent.pipeline.AgentPipeline;
 import com.quince.lawyeraiassistant.agent.runtime.action.DefaultAgentActionCoordinator;
 import com.quince.lawyeraiassistant.agent.runtime.evidence.DefaultAgentEvidencePolicy;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentCostProperties;
+import com.quince.lawyeraiassistant.agent.runtime.cost.InMemoryAgentExecutionCostAttributionRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.micrometer.AgentMicrometerMetrics;
@@ -144,7 +146,9 @@ class DefaultAgentRuntimeStreamingTest {
                                                 new AgentPerformanceContext(),
                                                 ignored -> List.of(),
                                                 micrometerMetrics,
-                                                performanceSnapshotRecorder));
+                                                performanceSnapshotRecorder,
+                                                new InMemoryAgentExecutionCostAttributionRecorder(),
+                                                new AgentCostProperties()));
 
                 when(skillSelector.select(any()))
                                 .thenReturn(Optional.empty());

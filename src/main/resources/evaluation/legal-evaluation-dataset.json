@@ -1,0 +1,104 @@
+[
+  {
+    "caseId": "labor-illegal-termination-001",
+    "category": "labor-law",
+    "question": "用人单位违法解除劳动合同需要承担什么责任？请说明劳动者可以主张的救济方式、赔偿金计算规则及相关法律依据。",
+    "requiredConcepts": [
+      "违法解除|违法解除劳动合同|违法辞退",
+      "赔偿金|违法解除赔偿金|违法辞退赔偿金",
+      "经济补偿标准的二倍|经济补偿金的二倍|二倍经济补偿金|两倍经济补偿金|经济补偿标准二倍",
+      "工作年限|在本单位工作的年限|劳动者工作年限",
+      "劳动合同法第四十八条|劳动合同法第48条|第四十八条|第48条",
+      "劳动合同法第八十七条|劳动合同法第87条|第八十七条|第87条"
+    ],
+    "forbiddenClaims": [
+      "违法解除不需要赔偿|违法辞退不需要赔偿",
+      "赔偿金固定为一个月工资",
+      "劳动者只能接受解除"
+    ],
+    "minimumAnswerLength": 300,
+    "minimumConceptCoverage": 0.66,
+    "minimumScore": 75,
+    "maximumCostUsd": 0.05
+  },
+  {
+    "caseId": "labor-economic-compensation-001",
+    "category": "labor-law",
+    "question": "经济补偿金如何计算？请说明工作年限、月工资以及不满一年情况下的计算规则。",
+    "requiredConcepts": [
+      "工作年限|在本单位工作的年限",
+      "每满一年支付一个月工资|每工作一年支付一个月工资|一年一个月工资",
+      "六个月以上不满一年|满六个月不满一年|六个月以上按一年计算",
+      "不满六个月|不足六个月|不满六个月支付半个月工资",
+      "月工资|解除或者终止前十二个月的平均工资|十二个月平均工资"
+    ],
+    "forbiddenClaims": [
+      "所有员工固定补偿十二个月",
+      "经济补偿与工作年限无关"
+    ],
+    "minimumAnswerLength": 250,
+    "minimumConceptCoverage": 0.80,
+    "minimumScore": 75,
+    "maximumCostUsd": 0.04
+  },
+  {
+    "caseId": "labor-probation-termination-001",
+    "category": "labor-law",
+    "question": "试用期内用人单位可以随时解除劳动合同吗？请说明解除条件、举证责任以及程序要求。",
+    "requiredConcepts": [
+      "不能随时解除|不得随意解除|不能任意解除|并非可以随时解除",
+      "录用条件|不符合录用条件",
+      "证明|证据|举证",
+      "说明理由|告知解除理由|向劳动者说明理由",
+      "试用期"
+    ],
+    "forbiddenClaims": [
+      "试用期可以无理由辞退",
+      "试用期劳动者不受劳动法保护"
+    ],
+    "minimumAnswerLength": 250,
+    "minimumConceptCoverage": 0.80,
+    "minimumScore": 75,
+    "maximumCostUsd": 0.04
+  },
+  {
+    "caseId": "labor-overtime-001",
+    "category": "labor-law",
+    "question": "工作日、休息日和法定节假日加班工资如何计算？请分别说明三种情况下的工资支付比例以及休息日补休规则。",
+    "requiredConcepts": [
+      "百分之一百五十|150%|1.5倍|一点五倍",
+      "百分之二百|200%|2倍|两倍",
+      "百分之三百|300%|3倍|三倍",
+      "休息日|双休日|周末",
+      "法定休假日|法定节假日"
+    ],
+    "forbiddenClaims": [
+      "所有加班统一按百分之一百五十|所有加班统一按150%",
+      "法定节假日加班可以调休代替|法定节假日可以用补休代替加班工资"
+    ],
+    "minimumAnswerLength": 250,
+    "minimumConceptCoverage": 0.80,
+    "minimumScore": 75,
+    "maximumCostUsd": 0.04
+  },
+  {
+    "caseId": "labor-arbitration-limitation-001",
+    "category": "labor-law",
+    "question": "劳动争议申请仲裁的时效是多久？请说明起算时间以及劳动关系存续期间拖欠劳动报酬的特殊规则。",
+    "requiredConcepts": [
+      "一年|一年仲裁时效|仲裁时效期间为一年",
+      "知道或者应当知道|知道或应当知道",
+      "权利被侵害|权利受到侵害",
+      "仲裁时效|申请仲裁的时效",
+      "劳动关系存续期间|劳动关系存续期内"
+    ],
+    "forbiddenClaims": [
+      "劳动仲裁没有时效",
+      "所有劳动争议时效都是三年"
+    ],
+    "minimumAnswerLength": 250,
+    "minimumConceptCoverage": 0.80,
+    "minimumScore": 75,
+    "maximumCostUsd": 0.04
+  }
+]

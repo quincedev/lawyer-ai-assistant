@@ -1,7 +1,10 @@
 package com.quince.lawyeraiassistant.agent.runtime.metrics;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentCallCost;
 
 /**
  * Per-execution Agent performance metrics.
@@ -19,167 +22,231 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class AgentPerformanceMetrics {
 
-    private final long startedAtNanos = System.nanoTime();
+        private final long startedAtNanos = System.nanoTime();
 
-    private final AtomicInteger llmCalls = new AtomicInteger();
+        private final AtomicInteger llmCalls = new AtomicInteger();
 
-    private final AtomicLong llmDurationMs = new AtomicLong();
+        private final AtomicLong llmDurationMs = new AtomicLong();
 
-    private final AtomicInteger toolCalls = new AtomicInteger();
+        private final AtomicInteger toolCalls = new AtomicInteger();
 
-    private final AtomicLong toolDurationMs = new AtomicLong();
+        private final AtomicLong toolDurationMs = new AtomicLong();
 
-    private final AtomicInteger mcpCalls = new AtomicInteger();
+        private final AtomicInteger mcpCalls = new AtomicInteger();
 
-    private final AtomicLong mcpDurationMs = new AtomicLong();
+        private final AtomicLong mcpDurationMs = new AtomicLong();
 
-    private final AtomicInteger cacheHits = new AtomicInteger();
+        private final AtomicInteger cacheHits = new AtomicInteger();
 
-    private final AtomicInteger cacheMisses = new AtomicInteger();
+        private final AtomicInteger cacheMisses = new AtomicInteger();
 
-    private final AtomicLong evidenceOriginalChars = new AtomicLong();
+        private final AtomicLong evidenceOriginalChars = new AtomicLong();
 
-    private final AtomicLong evidenceCompactedChars = new AtomicLong();
+        private final AtomicLong evidenceCompactedChars = new AtomicLong();
 
-    private final AtomicInteger retries = new AtomicInteger();
+        private final AtomicInteger retries = new AtomicInteger();
 
-    private final AtomicInteger noProgressSuppressions = new AtomicInteger();
+        private final AtomicInteger noProgressSuppressions = new AtomicInteger();
 
-    /*
-     * =================================================
-     * LLM
-     * =================================================
-     */
+        private final AtomicLong promptTokens = new AtomicLong();
 
-    public void recordLlmCall(
-            long durationMs) {
+        private final AtomicLong completionTokens = new AtomicLong();
 
-        llmCalls.incrementAndGet();
+        private final AtomicLong totalTokens = new AtomicLong();
 
-        llmDurationMs.addAndGet(
-                Math.max(
-                        0,
-                        durationMs));
-    }
+        private final AtomicInteger usageMissingCalls = new AtomicInteger();
 
-    /*
-     * =================================================
-     * TOOL
-     * =================================================
-     */
+        private final AtomicLong llmCostMicros = new AtomicLong();
 
-    public void recordToolCall(
-            long durationMs) {
+        private final AtomicLong pricedLlmCalls = new AtomicLong();
 
-        toolCalls.incrementAndGet();
+        private final AtomicLong pricingMissingCalls = new AtomicLong();
 
-        toolDurationMs.addAndGet(
-                Math.max(
-                        0,
-                        durationMs));
-    }
+        /*
+         * =================================================
+         * LLM
+         * =================================================
+         */
 
-    /*
-     * =================================================
-     * MCP
-     * =================================================
-     */
+        public void recordLlmCall(
+                        long durationMs) {
 
-    public void recordMcpCall(
-            long durationMs) {
+                llmCalls.incrementAndGet();
 
-        mcpCalls.incrementAndGet();
+                llmDurationMs.addAndGet(
+                                Math.max(
+                                                0,
+                                                durationMs));
+        }
 
-        mcpDurationMs.addAndGet(
-                Math.max(
-                        0,
-                        durationMs));
-    }
+        public void recordTokenUsage(
+                        AgentTokenUsage usage) {
 
-    /*
-     * =================================================
-     * CACHE
-     * =================================================
-     */
+                java.util.Objects.requireNonNull(
+                                usage,
+                                "AgentTokenUsage must not be null");
 
-    public void recordCacheHit() {
+                if (!usage.available()) {
 
-        cacheHits.incrementAndGet();
-    }
+                        usageMissingCalls.incrementAndGet();
 
-    public void recordCacheMiss() {
+                        return;
+                }
 
-        cacheMisses.incrementAndGet();
-    }
+                promptTokens.addAndGet(
+                                usage.promptTokens());
 
-    /*
-     * =================================================
-     * EVIDENCE
-     * =================================================
-     */
+                completionTokens.addAndGet(
+                                usage.completionTokens());
 
-    public void recordEvidenceCompaction(
-            long originalChars,
-            long compactedChars) {
+                totalTokens.addAndGet(
+                                usage.totalTokens());
+        }
 
-        evidenceOriginalChars.addAndGet(
-                Math.max(
-                        0,
-                        originalChars));
+        /*
+         * =================================================
+         * TOOL
+         * =================================================
+         */
 
-        evidenceCompactedChars.addAndGet(
-                Math.max(
-                        0,
-                        compactedChars));
-    }
+        public void recordToolCall(
+                        long durationMs) {
 
-    /*
-     * =================================================
-     * RETRY
-     * =================================================
-     */
+                toolCalls.incrementAndGet();
 
-    public void recordRetry() {
+                toolDurationMs.addAndGet(
+                                Math.max(
+                                                0,
+                                                durationMs));
+        }
 
-        retries.incrementAndGet();
-    }
+        /*
+         * =================================================
+         * MCP
+         * =================================================
+         */
 
-    public void recordNoProgressSuppression() {
+        public void recordMcpCall(
+                        long durationMs) {
 
-        noProgressSuppressions.incrementAndGet();
-    }
+                mcpCalls.incrementAndGet();
 
-    /*
-     * =================================================
-     * SNAPSHOT
-     * =================================================
-     */
+                mcpDurationMs.addAndGet(
+                                Math.max(
+                                                0,
+                                                durationMs));
+        }
 
-    public AgentPerformanceSnapshot snapshot() {
+        /*
+         * =================================================
+         * CACHE
+         * =================================================
+         */
 
-        long totalDurationMs = (System.nanoTime()
-                - startedAtNanos)
-                / 1_000_000;
+        public void recordCacheHit() {
 
-        return new AgentPerformanceSnapshot(
-                totalDurationMs,
+                cacheHits.incrementAndGet();
+        }
 
-                llmCalls.get(),
-                llmDurationMs.get(),
+        public void recordCacheMiss() {
 
-                toolCalls.get(),
-                toolDurationMs.get(),
+                cacheMisses.incrementAndGet();
+        }
 
-                mcpCalls.get(),
-                mcpDurationMs.get(),
+        /*
+         * =================================================
+         * EVIDENCE
+         * =================================================
+         */
 
-                cacheHits.get(),
-                cacheMisses.get(),
+        public void recordEvidenceCompaction(
+                        long originalChars,
+                        long compactedChars) {
 
-                evidenceOriginalChars.get(),
-                evidenceCompactedChars.get(),
+                evidenceOriginalChars.addAndGet(
+                                Math.max(
+                                                0,
+                                                originalChars));
 
-                retries.get(),
-                noProgressSuppressions.get());
-    }
+                evidenceCompactedChars.addAndGet(
+                                Math.max(
+                                                0,
+                                                compactedChars));
+        }
+
+        /*
+         * =================================================
+         * RETRY
+         * =================================================
+         */
+
+        public void recordRetry() {
+
+                retries.incrementAndGet();
+        }
+
+        public void recordNoProgressSuppression() {
+
+                noProgressSuppressions.incrementAndGet();
+        }
+
+        /*
+         * =================================================
+         * SNAPSHOT
+         * =================================================
+         */
+
+        public AgentPerformanceSnapshot snapshot() {
+
+                long totalDurationMs = (System.nanoTime()
+                                - startedAtNanos)
+                                / 1_000_000;
+
+                return new AgentPerformanceSnapshot(
+                                totalDurationMs,
+
+                                llmCalls.get(),
+                                llmDurationMs.get(),
+
+                                promptTokens.get(),
+                                completionTokens.get(),
+                                totalTokens.get(),
+                                usageMissingCalls.get(),
+
+                                toolCalls.get(),
+                                toolDurationMs.get(),
+
+                                mcpCalls.get(),
+                                mcpDurationMs.get(),
+
+                                cacheHits.get(),
+                                cacheMisses.get(),
+
+                                evidenceOriginalChars.get(),
+                                evidenceCompactedChars.get(),
+
+                                retries.get(),
+                                noProgressSuppressions.get(),
+                                llmCostMicros.get(),
+                                pricedLlmCalls.get(),
+                                pricingMissingCalls.get());
+        }
+
+        public void recordLlmCost(
+                        AgentCallCost cost) {
+
+                Objects.requireNonNull(
+                                cost,
+                                "cost must not be null");
+
+                llmCostMicros.addAndGet(
+                                cost.costMicros());
+
+                pricedLlmCalls.incrementAndGet();
+        }
+
+        public void recordPricingMissing() {
+
+                pricingMissingCalls.incrementAndGet();
+        }
 }

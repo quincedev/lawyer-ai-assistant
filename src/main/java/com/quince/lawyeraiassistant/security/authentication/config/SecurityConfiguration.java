@@ -201,6 +201,12 @@ public class SecurityConfiguration {
                                                                 .requestMatchers(
                                                                                 "/actuator/**")
                                                                 .authenticated()
+                                                                .requestMatchers(
+                                                                                "/api/evaluation/live",
+                                                                                "/api/evaluation/live/**")
+                                                                .hasAnyRole(
+                                                                                "DIRECTOR",
+                                                                                "ADMIN")
 
                                                                 /*
                                                                  * All normal application APIs require JWT

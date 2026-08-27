@@ -1,25 +1,20 @@
 package com.quince.lawyeraiassistant.agent.runtime.metrics;
 
+import org.springframework.stereotype.Component;
+
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.springframework.stereotype.Component;
-
-/**
- * 保存最近一次完成的 Agent Performance Snapshot。
- *
- * 第一版主要用于：
- * - Performance Regression E2E
- * - Release Gate
- * - 本地诊断
- *
- * 注意：
- * 这不是长期生产历史存储。
- */
 @Component
 public class AgentPerformanceSnapshotRecorder {
 
     private final AtomicReference<AgentPerformanceSnapshot> latest = new AtomicReference<>();
+
+    /*
+     * Live Evaluation 使用请求线程绑定的 Snapshot，
+     * 避免被其他并发 Agent 请求覆盖。
+     */
+    private final ThreadLocal<AgentPerformanceSnapshot> currentThreadLatest = new ThreadLocal<>();
 
     public void record(
             AgentPerformanceSnapshot snapshot) {
@@ -28,8 +23,9 @@ public class AgentPerformanceSnapshotRecorder {
             return;
         }
 
-        latest.set(
-                snapshot);
+        latest.set(snapshot);
+
+        currentThreadLatest.set(snapshot);
     }
 
     public Optional<AgentPerformanceSnapshot> latest() {
@@ -51,9 +47,35 @@ public class AgentPerformanceSnapshotRecorder {
         return snapshot;
     }
 
+    public Optional<AgentPerformanceSnapshot> currentThreadLatest() {
+
+        return Optional.ofNullable(
+                currentThreadLatest.get());
+    }
+
+    public AgentPerformanceSnapshot requireCurrentThreadLatest() {
+
+        AgentPerformanceSnapshot snapshot = currentThreadLatest.get();
+
+        if (snapshot == null) {
+
+            throw new IllegalStateException(
+                    "No completed Agent performance snapshot "
+                            + "is available for the current thread");
+        }
+
+        return snapshot;
+    }
+
+    public void clearCurrentThread() {
+
+        currentThreadLatest.remove();
+    }
+
     public void clear() {
 
-        latest.set(
-                null);
+        latest.set(null);
+
+        currentThreadLatest.remove();
     }
 }

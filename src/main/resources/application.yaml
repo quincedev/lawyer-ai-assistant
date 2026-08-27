@@ -83,6 +83,28 @@ spring:
 # Application Configuration
 # =============================================================
 app:
+  evaluation:
+    live:
+      enabled: ${AI_LIVE_EVALUATION_ENABLED:false}
+      dataset-location: ${AI_EVALUATION_DATASET_LOCATION:classpath:evaluation/legal-evaluation-dataset.json}
+      maximum-cases: ${AI_EVALUATION_MAXIMUM_CASES:5}
+
+    judge:
+      enabled: ${AI_EVALUATION_JUDGE_ENABLED:false}
+      minimum-score: ${AI_EVALUATION_JUDGE_MINIMUM_SCORE:75}
+      fail-open: ${AI_EVALUATION_JUDGE_FAIL_OPEN:true}
+      maximum-answer-characters: ${AI_EVALUATION_JUDGE_MAXIMUM_ANSWER_CHARACTERS:12000}
+
+  observability:
+    cost:
+      enabled: ${AI_COST_ENABLED:true}
+      currency: ${AI_COST_CURRENCY:USD}
+
+      models:
+        "[deepseek-v4-flash]":
+          prompt-per-million: ${DEEPSEEK_CHAT_PROMPT_PRICE_PER_MILLION:0}
+          completion-per-million: ${DEEPSEEK_CHAT_COMPLETION_PRICE_PER_MILLION:0}
+
   security:
     identity:
       # 默认开发模式继续使用内存账号。
@@ -167,7 +189,25 @@ app:
       warn-no-progress-suppressions: 1
       critical-no-progress-suppressions: 2
 
-      warn-low-cache-hit-ratio: 0.20
+      warn-low-cache-hit-ratio:
+        0.20
+
+        # =====================================================
+      # Execution Cost Guardrail
+      #
+      # 这是执行完成后的可观测性告警，
+      # 不会中断正在执行的 LLM 请求。
+      # =====================================================
+
+      cost-enabled: ${AI_COST_GUARDRAIL_ENABLED:true}
+
+      warn-execution-cost-usd: ${AI_COST_WARN_PER_EXECUTION_USD:0.02}
+
+      critical-execution-cost-usd: ${AI_COST_CRITICAL_PER_EXECUTION_USD:0.05}
+
+      require-complete-token-usage: ${AI_COST_REQUIRE_COMPLETE_USAGE:true}
+
+      require-complete-pricing: ${AI_COST_REQUIRE_COMPLETE_PRICING:true}
 
   # ===========================================================
   # Tenant

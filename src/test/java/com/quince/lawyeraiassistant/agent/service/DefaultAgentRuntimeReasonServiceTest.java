@@ -4,6 +4,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentTask;
 import com.quince.lawyeraiassistant.agent.prompt.builder.RuntimeReasonPromptContextBuilder;
 import com.quince.lawyeraiassistant.agent.prompt.model.RuntimeReasonPromptContext;
+import com.quince.lawyeraiassistant.agent.service.support.BoundedLlmCallExecutor;
 import com.quince.lawyeraiassistant.prompt.builder.PromptBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,7 +55,8 @@ class DefaultAgentRuntimeReasonServiceTest {
         service = new DefaultAgentRuntimeReasonService(
                 chatClient,
                 promptBuilder,
-                promptContextBuilder);
+                promptContextBuilder,
+                new BoundedLlmCallExecutor());
     }
 
     @Test
@@ -263,5 +266,132 @@ class DefaultAgentRuntimeReasonServiceTest {
                 () -> service.reason(
                         context,
                         task));
+    }
+
+    @Test
+    void shouldRetryOnceWhenFirstResultIsBlank() {
+
+        AgentContext context = AgentContext.from(
+                "分析劳动合同");
+
+        AgentTask task = AgentTask.pending(
+                "task-1",
+                "分析合同");
+
+        RuntimeReasonPromptContext promptContext = new RuntimeReasonPromptContext(
+                "分析劳动合同",
+                "task-1 | RUNNING | 分析合同",
+                "当前计划",
+                "已有结果");
+
+        Prompt prompt = mock(
+                Prompt.class);
+
+        when(
+                promptContextBuilder.build(
+                        context,
+                        task))
+                .thenReturn(
+                        promptContext);
+
+        when(
+                promptBuilder.buildRuntimeReason(
+                        promptContext))
+                .thenReturn(
+                        prompt);
+
+        when(
+                chatClient.prompt(
+                        prompt))
+                .thenReturn(
+                        requestSpec);
+
+        when(
+                requestSpec.call())
+                .thenReturn(
+                        responseSpec);
+
+        when(
+                responseSpec.content())
+                .thenReturn(
+                        "   ",
+                        "  第二次调用返回有效分析结果。  ");
+
+        String result = service.reason(
+                context,
+                task);
+
+        assertEquals(
+                "第二次调用返回有效分析结果。",
+                result);
+
+        verify(
+                responseSpec,
+                times(2))
+                .content();
+    }
+
+    @Test
+    void shouldFailAfterBoundedRetryWhenBothResultsAreBlank() {
+
+        AgentContext context = AgentContext.from(
+                "分析劳动合同");
+
+        AgentTask task = AgentTask.pending(
+                "task-1",
+                "分析合同");
+
+        RuntimeReasonPromptContext promptContext = new RuntimeReasonPromptContext(
+                "分析劳动合同",
+                "task-1 | RUNNING | 分析合同",
+                "当前计划",
+                "已有结果");
+
+        Prompt prompt = mock(
+                Prompt.class);
+
+        when(
+                promptContextBuilder.build(
+                        context,
+                        task))
+                .thenReturn(
+                        promptContext);
+
+        when(
+                promptBuilder.buildRuntimeReason(
+                        promptContext))
+                .thenReturn(
+                        prompt);
+
+        when(
+                chatClient.prompt(
+                        prompt))
+                .thenReturn(
+                        requestSpec);
+
+        when(
+                requestSpec.call())
+                .thenReturn(
+                        responseSpec);
+
+        when(
+                responseSpec.content())
+                .thenReturn(
+                        "   ");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.reason(
+                        context,
+                        task));
+
+        assertEquals(
+                "Runtime reason result must not be blank",
+                exception.getMessage());
+
+        verify(
+                responseSpec,
+                times(2))
+                .content();
     }
 }

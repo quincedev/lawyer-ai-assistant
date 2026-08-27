@@ -2,6 +2,7 @@ package com.quince.lawyeraiassistant.agent.runtime.observability;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -10,6 +11,9 @@ import org.springframework.stereotype.Component;
 
 import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentCostProperties;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentExecutionCostAttribution;
+import com.quince.lawyeraiassistant.agent.runtime.cost.AgentExecutionCostAttributionRecorder;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceContext;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceMetrics;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshot;
@@ -33,11 +37,17 @@ public final class DefaultAgentExecutionObserver
 
         private final AgentPerformanceSnapshotRecorder performanceSnapshotRecorder;
 
+        private final AgentExecutionCostAttributionRecorder costAttributionRecorder;
+
+        private final AgentCostProperties costProperties;
+
         public DefaultAgentExecutionObserver(
                         AgentPerformanceContext performanceContext,
                         PerformanceGuardrailService performanceGuardrailService,
                         AgentMicrometerMetrics micrometerMetrics,
-                        AgentPerformanceSnapshotRecorder performanceSnapshotRecorder) {
+                        AgentPerformanceSnapshotRecorder performanceSnapshotRecorder,
+                        AgentExecutionCostAttributionRecorder costAttributionRecorder,
+                        AgentCostProperties costProperties) {
 
                 this.performanceContext = Objects.requireNonNull(
                                 performanceContext,
@@ -54,6 +64,14 @@ public final class DefaultAgentExecutionObserver
                 this.performanceSnapshotRecorder = Objects.requireNonNull(
                                 performanceSnapshotRecorder,
                                 "performanceSnapshotRecorder must not be null");
+
+                this.costAttributionRecorder = Objects.requireNonNull(
+                                costAttributionRecorder,
+                                "costAttributionRecorder must not be null");
+
+                this.costProperties = Objects.requireNonNull(
+                                costProperties,
+                                "costProperties must not be null");
         }
 
         @Override
@@ -62,6 +80,7 @@ public final class DefaultAgentExecutionObserver
                 AgentPerformanceMetrics metrics = performanceContext.start();
 
                 return new AgentExecutionObservation(
+                                UUID.randomUUID().toString(),
                                 System.nanoTime(),
                                 metrics);
         }
@@ -97,14 +116,32 @@ public final class DefaultAgentExecutionObserver
 
                 try {
 
+                        /*
+                         * 必须先创建 Snapshot，
+                         * 后续 Recorder、Cost Attribution、
+                         * Micrometer 和 Guardrail 共用同一份结果。
+                         */
                         AgentPerformanceSnapshot snapshot = observation.performanceMetrics()
                                         .snapshot();
 
                         performanceSnapshotRecorder.record(
                                         snapshot);
 
+                        AgentExecutionCostAttribution attribution = createCostAttribution(
+                                        observation,
+                                        initialContext,
+                                        result,
+                                        executionStatus,
+                                        snapshot);
+
+                        costAttributionRecorder.record(
+                                        attribution);
+
                         logPerformanceSummary(
                                         snapshot);
+
+                        logCostAttribution(
+                                        attribution);
 
                         micrometerMetrics.recordExecution(
                                         snapshot);
@@ -120,6 +157,10 @@ public final class DefaultAgentExecutionObserver
 
                 } finally {
 
+                        /*
+                         * 无论 Snapshot、日志、Micrometer 或
+                         * Guardrail 是否异常，都必须清理线程上下文。
+                         */
                         performanceContext.clear();
                 }
         }
@@ -167,7 +208,17 @@ public final class DefaultAgentExecutionObserver
                                                 + "evidenceCompactedChars={}, "
                                                 + "evidenceReductionRatio={}, "
                                                 + "retries={}, "
-                                                + "noProgressSuppressions={}",
+                                                + "noProgressSuppressions={}, "
+                                                + "promptTokens={}, "
+                                                + "completionTokens={}, "
+                                                + "totalTokens={}, "
+                                                + "usageMissingCalls={}, "
+                                                + "tokenUsageCoverageRatio={}, "
+                                                + "pricedLlmCalls={}, "
+                                                + "pricingMissingCalls={}, "
+                                                + "pricingCoverageRatio={}, "
+                                                + "llmCostMicros={}, "
+                                                + "llmCostUsd={}",
                                 snapshot.totalDurationMs(),
                                 snapshot.llmCalls(),
                                 snapshot.llmDurationMs(),
@@ -183,7 +234,17 @@ public final class DefaultAgentExecutionObserver
                                 snapshot.evidenceCompactedChars(),
                                 snapshot.evidenceReductionRatio(),
                                 snapshot.retries(),
-                                snapshot.noProgressSuppressions());
+                                snapshot.noProgressSuppressions(),
+                                snapshot.promptTokens(),
+                                snapshot.completionTokens(),
+                                snapshot.totalTokens(),
+                                snapshot.usageMissingCalls(),
+                                snapshot.tokenUsageCoverageRatio(),
+                                snapshot.pricedLlmCalls(),
+                                snapshot.pricingMissingCalls(),
+                                snapshot.pricingCoverageRatio(),
+                                snapshot.llmCostMicros(),
+                                snapshot.llmCostUsd());
         }
 
         private void logPerformanceGuardrailResult(
@@ -225,5 +286,67 @@ public final class DefaultAgentExecutionObserver
                                 .current()
                                 .ifPresent(
                                                 AgentPerformanceMetrics::recordNoProgressSuppression);
+        }
+
+        private AgentExecutionCostAttribution createCostAttribution(
+                        AgentExecutionObservation observation,
+                        AgentContext initialContext,
+                        AgentContext result,
+                        AgentExecutionStatus executionStatus,
+                        AgentPerformanceSnapshot snapshot) {
+
+                String tenantId = initialContext.getTenantContext() == null
+                                ? "unknown"
+                                : initialContext.getTenantContext()
+                                                .tenantId();
+
+                AgentStatus agentStatus = result == null
+                                ? null
+                                : result.getStatus();
+
+                return AgentExecutionCostAttribution.from(
+                                observation.executionId(),
+                                tenantId,
+                                executionStatus,
+                                agentStatus,
+                                costProperties.getCurrency(),
+                                snapshot);
+        }
+
+        private void logCostAttribution(
+                        AgentExecutionCostAttribution attribution) {
+
+                log.info(
+                                "Agent execution cost attributed. "
+                                                + "executionId={}, "
+                                                + "tenantId={}, "
+                                                + "executionStatus={}, "
+                                                + "agentStatus={}, "
+                                                + "llmCalls={}, "
+                                                + "promptTokens={}, "
+                                                + "completionTokens={}, "
+                                                + "totalTokens={}, "
+                                                + "usageMissingCalls={}, "
+                                                + "pricedLlmCalls={}, "
+                                                + "pricingMissingCalls={}, "
+                                                + "currency={}, "
+                                                + "costMicros={}, "
+                                                + "cost={}, "
+                                                + "fullyAttributed={}",
+                                attribution.executionId(),
+                                attribution.tenantId(),
+                                attribution.executionStatus(),
+                                attribution.agentStatus(),
+                                attribution.llmCalls(),
+                                attribution.promptTokens(),
+                                attribution.completionTokens(),
+                                attribution.totalTokens(),
+                                attribution.usageMissingCalls(),
+                                attribution.pricedLlmCalls(),
+                                attribution.pricingMissingCalls(),
+                                attribution.currency(),
+                                attribution.costMicros(),
+                                attribution.cost(),
+                                attribution.fullyAttributed());
         }
 }
