@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SecurityTest
-@SpringBootTest
+@SpringBootTest(properties = "app.rag.knowledge-base.enabled=false")
 @AutoConfigureMockMvc
 class AuthenticationIntegrationTest {
 

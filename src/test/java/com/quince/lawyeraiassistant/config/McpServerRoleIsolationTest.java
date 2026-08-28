@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
         "spring.ai.deepseek.api-key=test-key",
@@ -28,6 +29,9 @@ class McpServerRoleIsolationTest {
 
     @Autowired
     private ApplicationContext applicationContext;
+
+    @MockitoBean
+    private KnowledgeBaseInitializer knowledgeBaseInitializer;
 
     @Test
     void shouldCreateRagRuntime() {
