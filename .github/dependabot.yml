@@ -1,0 +1,63 @@
+version: 2
+
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
+    commit-message:
+      prefix: deps
+    groups:
+      maven-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:30"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:30"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: deps
