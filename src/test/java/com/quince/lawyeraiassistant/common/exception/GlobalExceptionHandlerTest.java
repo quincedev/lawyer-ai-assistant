@@ -257,4 +257,39 @@ class GlobalExceptionHandlerTest {
     assertThat(response.getBody().path())
         .isEqualTo("/api/playground/retrieval");
   }
+
+  @Test
+  void shouldReturn404ForMissingDomainResource() {
+
+    GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    MockHttpServletRequest request = new MockHttpServletRequest(
+        "POST",
+        "/api/evaluation/live/run/unknown-case-id");
+
+    ResourceNotFoundException exception = new ResourceNotFoundException(
+        "Evaluation case not found: unknown-case-id");
+
+    ResponseEntity<ErrorResponse> response = handler.handleResourceNotFound(
+        exception,
+        request);
+
+    assertThat(response.getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+
+    assertThat(response.getBody())
+        .isNotNull();
+
+    assertThat(response.getBody().code())
+        .isEqualTo("RESOURCE_NOT_FOUND");
+
+    assertThat(response.getBody().message())
+        .isEqualTo("Evaluation case not found: unknown-case-id");
+
+    assertThat(response.getBody().status())
+        .isEqualTo(404);
+
+    assertThat(response.getBody().path())
+        .isEqualTo("/api/evaluation/live/run/unknown-case-id");
+  }
 }

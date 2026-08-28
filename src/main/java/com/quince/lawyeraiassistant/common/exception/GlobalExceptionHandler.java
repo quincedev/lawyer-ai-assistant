@@ -201,6 +201,22 @@ public class GlobalExceptionHandler {
                                 .body(response);
         }
 
+        @ExceptionHandler(ResourceNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleResourceNotFound(
+                        ResourceNotFoundException exception,
+                        HttpServletRequest request) {
+
+                ErrorResponse response = createResponse(
+                                ErrorCode.RESOURCE_NOT_FOUND,
+                                exception.getMessage(),
+                                HttpStatus.NOT_FOUND,
+                                request);
+
+                return ResponseEntity
+                                .status(HttpStatus.NOT_FOUND)
+                                .body(response);
+        }
+
         @ExceptionHandler(Exception.class)
         public ResponseEntity<ErrorResponse> handleUnexpectedException(
                         Exception exception,

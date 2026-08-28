@@ -374,15 +374,25 @@ a private network, firewall, or reverse proxy policy.
 - [Architecture dependency rules](docs/deployment/architecture/DEPENDENCY_RULES.md)
 - [Agent metrics contract](docs/observability/AGENT_METRICS_CONTRACT.md)
 - [Final verified baseline](docs/FINAL_BASELINE.md)
+- [AI-assisted Development Workflow](docs/engineering/AI_ASSISTED_DEVELOPMENT.md)
+- [TDD and Regression Evidence](docs/engineering/TDD_EVIDENCE.md)
+- [v0.1.0 Release Notes](docs/releases/v0.1.0.md)
 
 ## Frontend
 
-The frontend is intentionally maintained in a separate repository to preserve
-a clean frontend/backend boundary. The frontend will communicate only with the
-MCP Agent API and will not directly access the MCP Server, MySQL, Redis, Ollama,
-or Prometheus.
+The browser frontend is maintained in a separate repository.
 
-The frontend repository link will be added after it is published.
+Backend and frontend integration is documented in:
+
+- [Frontend API Contract](docs/api/FRONTEND_API_CONTRACT.md)
+- [Frontend Repository Handoff](docs/api/FRONTEND_HANDOFF.md)
+- [Postman Collection](postman/Lawyer-AI-Assistant.postman_collection.json)
+
+The frontend consumes only the public HTTP API. It does not connect directly
+to MySQL, Redis, Ollama, MCP Server, Prometheus, or Grafana.
+
+The frontend repository link will be added after the separate frontend project
+is published.
 
 ## Known Limitations
 
@@ -401,4 +411,3 @@ The frontend repository link will be added after it is published.
 
 No open-source license has been granted for this repository. Unless a license is
 added later, the source remains subject to the repository owner's copyright.
-

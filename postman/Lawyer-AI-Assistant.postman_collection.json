@@ -1,0 +1,135 @@
+{
+  "info": {
+    "_postman_id": "dd6edbe2-bb66-4277-93d5-cf33b6ab5d54",
+    "name": "Lawyer AI Assistant",
+    "description": "Frozen backend API contract for frontend integration and demonstrations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Login succeeded\", function () {",
+            "    pm.response.to.have.status(200);",
+            "});",
+            "const response = pm.response.json();",
+            "pm.expect(response.accessToken).to.be.a(\"string\").and.not.empty;",
+            "pm.environment.set(\"accessToken\", response.accessToken);"
+          ] } }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Current Identity",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Authenticated identity returned\", function () {",
+            "    pm.response.to.have.status(200);",
+            "    const body = pm.response.json();",
+            "    pm.expect(body.userId).to.be.a(\"string\");",
+            "    pm.expect(body.username).to.eql(pm.environment.get(\"username\"));",
+            "    pm.expect(body.tenantId).to.be.a(\"string\");",
+            "    pm.expect(body.roles).to.be.an(\"array\");",
+            "});"
+          ] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+        }
+      ]
+    },
+    {
+      "name": "Agent",
+      "item": [{
+        "name": "Run Agent",
+        "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"Agent execution completed\", function () {",
+          "    pm.response.to.have.status(200);",
+          "    const body = pm.response.json();",
+          "    pm.expect(body.status).to.eql(\"FINISHED\");",
+          "    pm.expect(body.finalAnswer).to.be.a(\"string\").and.not.empty;",
+          "});"
+        ] } }],
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": { "mode": "raw", "raw": "{\n  \"goal\": \"分析用人单位违法解除劳动合同的法律责任\"\n}", "options": { "raw": { "language": "json" } } },
+          "url": "{{baseUrl}}/api/playground/agent"
+        }
+      }]
+    },
+    {
+      "name": "Evaluation",
+      "item": [
+        {
+          "name": "Run Single Case",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Evaluation completed\", function () {",
+            "    pm.response.to.have.status(200);",
+            "    const body = pm.response.json();",
+            "    pm.expect(body.totalCases).to.eql(1);",
+            "    pm.expect(body.cases).to.have.lengthOf(1);",
+            "    pm.expect(body.cases[0].caseId).to.eql(pm.environment.get(\"evaluationCaseId\"));",
+            "    pm.expect(body.cases[0].score).to.be.a(\"number\");",
+            "    pm.expect(body.cases[0].agentStatus).to.eql(\"FINISHED\");",
+            "});"
+          ] } }],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/evaluation/live/run/{{evaluationCaseId}}" }
+        },
+        {
+          "name": "Run All Cases (Manual)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Evaluation report returned\", function () {",
+            "    pm.response.to.have.status(200);",
+            "    const body = pm.response.json();",
+            "    pm.expect(body.totalCases).to.be.a(\"number\").and.above(0);",
+            "    pm.expect(body.cases).to.be.an(\"array\").with.lengthOf(body.totalCases);",
+            "});"
+          ] } }],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/evaluation/live/run", "description": "Manual operation: may be long-running and incur model cost." }
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "auth": { "type": "noauth" },
+      "item": [
+        { "name": "Health", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Health is UP\", function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().status).to.eql(\"UP\");", "});"] } }], "request": { "method": "GET", "url": "{{baseUrl}}/actuator/health" } },
+        { "name": "Readiness", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Application is ready\", function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().status).to.eql(\"UP\");", "});"] } }], "request": { "method": "GET", "url": "{{baseUrl}}/actuator/health/readiness" } },
+        { "name": "Prometheus", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Prometheus metrics returned\", function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.text()).to.include(\"# HELP\");", "});"] } }], "request": { "method": "GET", "url": "{{baseUrl}}/actuator/prometheus" } }
+      ]
+    },
+    {
+      "name": "Security Negative Paths",
+      "item": [
+        { "name": "Auth Me Without Token - 401", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Request was rejected\", function () {", "    pm.response.to.have.status(401);", "});"] } }], "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/api/auth/me" } },
+        { "name": "Login With Wrong Password - 401", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Request was rejected\", function () {", "    pm.response.to.have.status(401);", "});"] } }], "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"wrong-password\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/auth/login" } },
+        { "name": "Malformed JWT - 401", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Request was rejected\", function () {", "    pm.response.to.have.status(401);", "});"] } }], "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "not-a-jwt", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/api/auth/me" } },
+        {
+          "name": "Tampered JWT - 401",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const token = pm.environment.get(\"accessToken\") || \"\";", "if (!token) { throw new Error(\"Run Authentication / Login first\"); }", "const last = token.slice(-1);", "pm.variables.set(\"tamperedToken\", token.slice(0, -1) + (last === \"a\" ? \"b\" : \"a\"));"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Request was rejected\", function () {", "    pm.response.to.have.status(401);", "});"] } }
+          ],
+          "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{tamperedToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+        },
+        { "name": "Unknown Evaluation Case - 404", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Unknown case was not found\", function () {", "    pm.response.to.have.status(404);", "});"] } }], "request": { "method": "POST", "url": "{{baseUrl}}/api/evaluation/live/run/unknown-case-id" } },
+        { "name": "Unauthorized Evaluation - 401 or 403", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Request was rejected\", function () {", "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);", "});"] } }], "request": { "auth": { "type": "noauth" }, "method": "POST", "url": "{{baseUrl}}/api/evaluation/live/run/{{evaluationCaseId}}" } }
+      ]
+    },
+    {
+      "name": "Development Debugging (Not Public Contract)",
+      "description": "Local-only diagnostics; excluded from the formal frontend contract.",
+      "item": [{ "name": "Retrieval Debug", "request": { "method": "GET", "url": "{{baseUrl}}/api/playground/retrieval?question=违法解除劳动合同&conversationId={{conversationId}}" } }]
+    }
+  ]
+}

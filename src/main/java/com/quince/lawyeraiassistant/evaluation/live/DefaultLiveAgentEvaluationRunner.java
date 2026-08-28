@@ -5,6 +5,7 @@ import com.quince.lawyeraiassistant.agent.model.AgentContext;
 import com.quince.lawyeraiassistant.agent.model.AgentStatus;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshot;
 import com.quince.lawyeraiassistant.agent.runtime.metrics.AgentPerformanceSnapshotRecorder;
+import com.quince.lawyeraiassistant.common.exception.ResourceNotFoundException;
 import com.quince.lawyeraiassistant.evaluation.AgentEvaluationService;
 import com.quince.lawyeraiassistant.evaluation.judge.ModelJudgeEvaluator;
 import com.quince.lawyeraiassistant.evaluation.judge.ModelJudgeProperties;
@@ -118,7 +119,7 @@ public class DefaultLiveAgentEvaluationRunner
 
                 AgentEvaluationCase evaluationCase = dataset.findById(caseId)
                                 .orElseThrow(
-                                                () -> new IllegalArgumentException(
+                                                () -> new ResourceNotFoundException(
                                                                 "Evaluation case not found: "
                                                                                 + caseId));
 

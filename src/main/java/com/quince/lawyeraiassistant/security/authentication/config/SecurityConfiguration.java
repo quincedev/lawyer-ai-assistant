@@ -1,6 +1,7 @@
 package com.quince.lawyeraiassistant.security.authentication.config;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -8,6 +9,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -31,6 +33,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.Customizer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.quince.lawyeraiassistant.security.authentication.ApplicationUserDetailsService;
 import com.quince.lawyeraiassistant.security.identity.ApplicationUserRepository;
@@ -39,6 +45,43 @@ import com.quince.lawyeraiassistant.security.identity.AuthenticationConstants;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(JwtSecurityProperties.class)
 public class SecurityConfiguration {
+
+        @Bean
+        CorsConfigurationSource corsConfigurationSource(
+                        @Value("${FRONTEND_ORIGIN:http://localhost:5173}") String frontendOrigin) {
+
+                if (frontendOrigin == null
+                                || frontendOrigin.isBlank()
+                                || "*".equals(frontendOrigin)) {
+
+                        throw new IllegalArgumentException(
+                                        "FRONTEND_ORIGIN must be an explicit origin");
+                }
+
+                CorsConfiguration configuration = new CorsConfiguration();
+
+                configuration.setAllowedOrigins(
+                                List.of(frontendOrigin));
+                configuration.setAllowedMethods(
+                                List.of(
+                                                "GET",
+                                                "POST",
+                                                "OPTIONS"));
+                configuration.setAllowedHeaders(
+                                List.of(
+                                                "Authorization",
+                                                "Content-Type"));
+                configuration.setAllowCredentials(false);
+                configuration.setMaxAge(3600L);
+
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+                source.registerCorsConfiguration(
+                                "/**",
+                                configuration);
+
+                return source;
+        }
 
         @Bean
         PasswordEncoder passwordEncoder() {
@@ -153,6 +196,8 @@ public class SecurityConfiguration {
                 http
                                 .csrf(
                                                 csrf -> csrf.disable())
+                                .cors(
+                                                Customizer.withDefaults())
                                 .sessionManagement(
                                                 session -> session.sessionCreationPolicy(
                                                                 SessionCreationPolicy.STATELESS))
