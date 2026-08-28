@@ -6,8 +6,10 @@ MCP-based legal tools, retrieval-augmented generation, production persistence,
 security guardrails, observability, cost attribution, and repeatable quality
 evaluation.
 
-> This repository contains the backend platform only. The Vue frontend is
-> maintained as a separate project and will be linked here after publication.
+> This repository contains the backend platform. The Vue 3 frontend is
+> maintained in the separate
+> [lawyer-ai-assistant-frontend](https://github.com/quincedev/lawyer-ai-assistant-frontend)
+> repository.
 
 ## Highlights
 
@@ -377,10 +379,14 @@ a private network, firewall, or reverse proxy policy.
 - [AI-assisted Development Workflow](docs/engineering/AI_ASSISTED_DEVELOPMENT.md)
 - [TDD and Regression Evidence](docs/engineering/TDD_EVIDENCE.md)
 - [v0.1.0 Release Notes](docs/releases/v0.1.0.md)
+- [System architecture](docs/ARCHITECTURE.md)
+- [Interview demonstration](docs/INTERVIEW_DEMO.md)
 
 ## Frontend
 
-The browser frontend is maintained in a separate repository.
+The browser frontend is maintained in a separate repository:
+
+- [lawyer-ai-assistant-frontend](https://github.com/quincedev/lawyer-ai-assistant-frontend)
 
 Backend and frontend integration is documented in:
 
@@ -390,9 +396,6 @@ Backend and frontend integration is documented in:
 
 The frontend consumes only the public HTTP API. It does not connect directly
 to MySQL, Redis, Ollama, MCP Server, Prometheus, or Grafana.
-
-The frontend repository link will be added after the separate frontend project
-is published.
 
 ## Known Limitations
 
