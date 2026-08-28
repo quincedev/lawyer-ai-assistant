@@ -55,7 +55,7 @@ RUN mvn \
 # Stage 2: Runtime
 # ============================================================
 
-FROM eclipse-temurin:21-jre-jammy AS runtime
+FROM eclipse-temurin:25-jre-jammy AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
