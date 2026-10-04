@@ -13,7 +13,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.7</version>
+		<version>4.1.1</version>
 		<relativePath />
 	</parent>
 
@@ -52,9 +52,9 @@
 
 		<java.version>21</java.version>
 
-		<spring-ai.version>2.0.0</spring-ai.version>
+		<spring-ai.version>2.0.1</spring-ai.version>
 
-		<mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
+		<mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
 
 		<!--
 			JUnit 5 Test Groups / Tags
@@ -71,7 +71,7 @@
 			只运行 @Tag("security") / @SecurityTest。
 		-->
 		<test.groups></test.groups>
-		<archunit.version>1.5.0</archunit.version>
+		<archunit.version>1.5.1</archunit.version>
 
 	</properties>
 
